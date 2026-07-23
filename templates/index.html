@@ -1,0 +1,2894 @@
+<!DOCTYPE html>
+<html lang="tr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Wild Owl - Cinematic Image Studio</title>
+    <!-- Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=JetBrains+Mono:wght@400;500;700&family=Outfit:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+    
+    <style>
+        :root {
+            --bg-deep: #05070c;
+            --bg-workspace: #0b0d16;
+            --panel-bg: rgba(16, 20, 35, 0.7);
+            --panel-border: rgba(255, 255, 255, 0.05);
+            --panel-border-glow: rgba(139, 92, 246, 0.15);
+            
+            --primary: #8b5cf6;
+            --primary-light: #a78bfa;
+            --primary-glow: rgba(139, 92, 246, 0.35);
+            
+            --secondary: #06b6d4;
+            --secondary-light: #22d3ee;
+            --secondary-glow: rgba(6, 182, 212, 0.35);
+            
+            --danger: #ef4444;
+            --success: #10b981;
+            --warning: #f59e0b;
+            
+            --text-main: #f3f4f6;
+            --text-muted: #9ca3af;
+            --text-dark: #4b5563;
+            
+            --transition-smooth: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+            --glow-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        /* Reset & Base */
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        body {
+            background-color: var(--bg-deep);
+            color: var(--text-main);
+            font-family: 'Outfit', sans-serif;
+            overflow-x: hidden;
+            min-height: 100vh;
+            display: flex;
+            flex-direction: column;
+            background-image: 
+                radial-gradient(circle at 10% 20%, rgba(139, 92, 246, 0.08) 0%, transparent 40%),
+                radial-gradient(circle at 90% 80%, rgba(6, 182, 212, 0.06) 0%, transparent 40%);
+            background-attachment: fixed;
+        }
+
+        /* Custom Scrollbar */
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.2);
+        }
+        ::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 3px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--primary);
+        }
+
+        /* Utility animations */
+        @keyframes pulse-glow {
+            0%, 100% { box-shadow: 0 0 15px rgba(139, 92, 246, 0.2); }
+            50% { box-shadow: 0 0 25px rgba(139, 92, 246, 0.45); }
+        }
+        @keyframes rotate-spinner {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+        @keyframes shake {
+            0%, 100% { transform: translateX(0); }
+            20%, 60% { transform: translateX(-6px); }
+            40%, 80% { transform: translateX(6px); }
+        }
+        @keyframes fade-in {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        @keyframes scale-up {
+            from { opacity: 0; transform: scale(0.95); }
+            to { opacity: 1; transform: scale(1); }
+        }
+
+        /* LOGIN CONTAINER */
+        .login-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-grow: 1;
+            padding: 20px;
+        }
+
+        .login-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 40px 30px;
+            width: 100%;
+            max-width: 420px;
+            text-align: center;
+            backdrop-filter: blur(16px);
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.5);
+            animation: scale-up 0.5s ease-out;
+        }
+
+        .login-logo {
+            font-size: 2.2rem;
+            font-weight: 800;
+            background: linear-gradient(135deg, var(--text-main) 30%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            letter-spacing: 2px;
+            margin-bottom: 6px;
+            text-transform: uppercase;
+        }
+
+        .login-sub {
+            color: var(--secondary-light);
+            font-size: 0.85rem;
+            font-weight: 600;
+            letter-spacing: 4px;
+            text-transform: uppercase;
+            margin-bottom: 35px;
+        }
+
+        .login-form {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+        }
+
+        .input-group {
+            display: flex;
+            flex-direction: column;
+            text-align: left;
+            gap: 8px;
+        }
+
+        .input-label {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            font-weight: 600;
+        }
+
+        .form-input {
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--panel-border);
+            border-radius: 8px;
+            padding: 14px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 1rem;
+            transition: var(--transition-smooth);
+        }
+
+        .form-input:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+        }
+
+        .btn-submit {
+            background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 8px;
+            padding: 14px;
+            color: white;
+            font-size: 1rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            margin-top: 10px;
+            box-shadow: 0 4px 15px rgba(139, 92, 246, 0.3);
+        }
+
+        .btn-submit:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.5);
+            background: linear-gradient(135deg, #9b6bf7 0%, #8b5cf6 100%);
+        }
+
+        .shake {
+            animation: shake 0.4s ease-in-out;
+        }
+
+        .login-error {
+            color: var(--danger);
+            font-size: 0.85rem;
+            margin-top: 10px;
+            display: none;
+        }
+
+        /* MAIN APP WRAPPER */
+        .app-container {
+            display: flex;
+            flex-direction: column;
+            height: 100vh;
+            max-height: 100vh;
+        }
+
+        /* HEADER */
+        .app-header {
+            background: rgba(6, 8, 14, 0.8);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--panel-border);
+            padding: 15px 30px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            z-index: 10;
+        }
+
+        .brand {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+        }
+
+        .brand-logo {
+            width: 32px;
+            height: 32px;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-weight: 800;
+            box-shadow: 0 0 10px var(--primary-glow);
+        }
+
+        .brand-text h1 {
+            font-size: 1.25rem;
+            font-weight: 800;
+            letter-spacing: 1px;
+            text-transform: uppercase;
+        }
+
+        .brand-text p {
+            font-size: 0.65rem;
+            color: var(--secondary-light);
+            letter-spacing: 2px;
+            font-weight: 700;
+            text-transform: uppercase;
+        }
+
+        .header-actions {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .btn-logout {
+            background: transparent;
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 6px;
+            color: var(--danger);
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-decoration: none;
+        }
+
+        .btn-logout:hover {
+            background: rgba(239, 68, 68, 0.1);
+            border-color: var(--danger);
+        }
+
+        /* WORKSPACE STAGE */
+        .workspace {
+            display: flex;
+            flex-grow: 1;
+            overflow: hidden;
+            position: relative;
+        }
+
+        /* SIDEBAR PANEL (CONTROLS) */
+        .sidebar {
+            width: 420px;
+            min-width: 420px;
+            background: var(--bg-workspace);
+            border-right: 1px solid var(--panel-border);
+            display: flex;
+            flex-direction: column;
+            overflow-y: auto;
+            padding: 25px;
+            gap: 25px;
+        }
+
+        /* MAIN CONTENT AREA */
+        .main-stage {
+            flex-grow: 1;
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            background: rgba(11, 13, 22, 0.4);
+        }
+
+        /* TABS HEADER - Segmented Control style */
+        .tabs-header {
+            display: flex;
+            background: rgba(8, 10, 18, 0.6);
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 10px;
+            padding: 4px;
+            gap: 4px;
+            margin: 12px 12px 4px 12px;
+            width: fit-content;
+            max-width: calc(100% - 24px);
+            overflow-x: auto;
+            backdrop-filter: blur(8px);
+            scrollbar-width: none; /* Hide scrollbar for Firefox */
+        }
+        .tabs-header::-webkit-scrollbar {
+            display: none; /* Hide scrollbar for Chrome/Safari */
+        }
+
+        .tab-btn {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            padding: 8px 16px;
+            font-size: 0.85rem;
+            font-weight: 600;
+            cursor: pointer;
+            border-radius: 8px;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            white-space: nowrap;
+        }
+
+        .tab-btn:hover {
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.02);
+        }
+
+        .tab-btn:active {
+            transform: scale(0.97);
+        }
+
+        .tab-btn.active {
+            color: white;
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.25) 0%, rgba(6, 182, 212, 0.15) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.4);
+            box-shadow: 0 4px 14px rgba(139, 92, 246, 0.2), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+        }
+
+        .tab-count {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            border-radius: 20px;
+            padding: 1px 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            color: var(--text-muted);
+            transition: var(--transition-smooth);
+        }
+
+        .tab-btn.active .tab-count {
+            background: rgba(139, 92, 246, 0.25);
+            border-color: rgba(139, 92, 246, 0.4);
+            color: var(--primary-light);
+        }
+
+        .tab-actions-row {
+            display: flex;
+            justify-content: flex-end;
+            margin-bottom: 6px;
+            width: 100%;
+            height: 28px;
+            align-items: center;
+        }
+        
+        .tab-actions-row .btn-logout {
+            font-size: 0.75rem;
+            padding: 5px 10px;
+            margin: 0;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+        }
+
+        /* TAB PANELS */
+        .tab-content {
+            flex-grow: 1;
+            overflow-y: auto;
+            padding: 6px 10px 15px 10px;
+            display: none;
+            animation: fade-in 0.4s ease-out;
+        }
+
+        .tab-content.active {
+            display: block;
+        }
+
+        /* SIDEBAR CONTROLS ELEMENT STYLING */
+        .section-title {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-main);
+            letter-spacing: 1px;
+            text-transform: uppercase;
+            margin-bottom: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        /* DROP ZONE */
+        .dropzone {
+            border: 2px dashed rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            background: rgba(0, 0, 0, 0.2);
+            position: relative;
+        }
+
+        .dropzone:hover, .dropzone.dragover {
+            border-color: var(--primary);
+            background: rgba(139, 92, 246, 0.05);
+        }
+
+        .dropzone-icon {
+            font-size: 24px;
+            color: var(--primary-light);
+            margin-bottom: 8px;
+        }
+
+        .dropzone-text {
+            font-size: 0.8rem;
+            color: var(--text-muted);
+        }
+
+        .dropzone-sub {
+            font-size: 0.7rem;
+            color: var(--text-dark);
+            margin-top: 4px;
+        }
+
+        /* UPLOADED THUMBNAILS */
+        .upload-previews {
+            display: grid;
+            grid-template-columns: repeat(3, 1fr);
+            gap: 10px;
+            margin-top: 12px;
+        }
+
+        .preview-box {
+            position: relative;
+            aspect-ratio: 1;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--panel-border);
+            background: rgba(0,0,0,0.3);
+        }
+
+        .preview-box img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .preview-remove {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(239, 68, 68, 0.9);
+            border: none;
+            color: white;
+            border-radius: 50%;
+            width: 20px;
+            height: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 10px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            z-index: 2;
+        }
+
+        .preview-remove:hover {
+            transform: scale(1.1);
+            background: var(--danger);
+        }
+
+        /* GRID/CARD STYLING FOR SELECTION */
+        .select-grid {
+            display: grid;
+            grid-template-columns: repeat(2, 1fr);
+            gap: 10px;
+        }
+
+        .select-card {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 12px;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-align: left;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .select-card:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .select-card.active {
+            background: rgba(139, 92, 246, 0.1);
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+        }
+
+        .select-card-name {
+            font-size: 0.85rem;
+            font-weight: 700;
+            color: var(--text-main);
+            margin-bottom: 4px;
+        }
+
+        .select-card-detail {
+            font-size: 0.7rem;
+            color: var(--text-muted);
+        }
+
+        /* CHIPS CONTAINER */
+        .chips-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+        }
+
+        .chip {
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--panel-border);
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 0.8rem;
+            font-weight: 600;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .chip:hover {
+            border-color: rgba(139, 92, 246, 0.4);
+            background: rgba(255, 255, 255, 0.04);
+        }
+
+        .chip.active {
+            background: rgba(139, 92, 246, 0.15);
+            border-color: var(--primary);
+            color: var(--primary-light);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.15);
+        }
+
+        .ratio-visual {
+            width: 14px;
+            border: 1px solid currentColor;
+            opacity: 0.7;
+            border-radius: 1px;
+        }
+
+        /* PROMPT TEXTAREA */
+        .prompt-textarea {
+            width: 100%;
+            min-height: 100px;
+            background: rgba(0, 0, 0, 0.4);
+            border: 1px solid var(--panel-border);
+            border-radius: 10px;
+            padding: 12px;
+            color: var(--text-main);
+            font-family: inherit;
+            font-size: 0.9rem;
+            resize: vertical;
+            transition: var(--transition-smooth);
+        }
+
+        .prompt-textarea:focus {
+            outline: none;
+            border-color: var(--primary);
+            box-shadow: 0 0 10px rgba(139, 92, 246, 0.2);
+        }
+
+        /* SLIDER & NUMBER CONTAINER */
+        .slider-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+
+        .slider-input {
+            flex-grow: 1;
+            height: 4px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+            outline: none;
+            -webkit-appearance: none;
+        }
+
+        .slider-input::-webkit-slider-thumb {
+            -webkit-appearance: none;
+            width: 16px;
+            height: 16px;
+            border-radius: 50%;
+            background: var(--primary);
+            cursor: pointer;
+            box-shadow: 0 0 10px var(--primary);
+            transition: var(--transition-smooth);
+        }
+
+        .slider-input::-webkit-slider-thumb:hover {
+            transform: scale(1.2);
+        }
+
+        .slider-val {
+            font-size: 0.9rem;
+            font-weight: 700;
+            min-width: 20px;
+            text-align: center;
+            color: var(--primary-light);
+        }
+
+        /* ACTION GENERATE BUTTON */
+        .btn-generate {
+            width: 100%;
+            background: linear-gradient(135deg, var(--primary) 0%, #7c3aed 100%);
+            border: none;
+            border-radius: 12px;
+            padding: 18px;
+            color: white;
+            font-size: 1.05rem;
+            font-weight: 800;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            transition: var(--transition-smooth);
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            box-shadow: 0 6px 20px rgba(139, 92, 246, 0.35);
+            margin-top: 10px;
+        }
+
+        .btn-generate:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(139, 92, 246, 0.55);
+            background: linear-gradient(135deg, #9b6bf7 0%, #8b5cf6 100%);
+        }
+
+        /* EMPTY STATES */
+        .empty-state {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 80px 20px;
+            color: var(--text-muted);
+            gap: 20px;
+            border: 1px dashed var(--panel-border);
+            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.01);
+            max-width: 600px;
+            margin: 40px auto;
+        }
+
+        .empty-icon {
+            font-size: 48px;
+            color: var(--text-dark);
+        }
+
+        .empty-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            color: var(--text-main);
+        }
+
+        /* JOB GRIDS (5 sütun yan yana, kompakt) */
+        .job-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+            max-width: 100%;
+        }
+
+        .job-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            overflow: hidden;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            display: flex;
+            flex-direction: column;
+            transition: var(--transition-smooth);
+            animation: scale-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+            height: fit-content;
+            position: relative;
+        }
+
+        .job-card:hover {
+            border-color: var(--panel-border-glow);
+        }
+
+        /* BANNER AREA */
+        .job-banner-area {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #141724;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .job-banner-area img,
+        .job-banner-area video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border: none;
+        }
+
+        .job-placeholder-banner {
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: linear-gradient(135deg, #070913 0%, #101423 100%);
+            user-select: none;
+        }
+
+        .placeholder-pulse-icon {
+            color: var(--primary-light);
+            filter: drop-shadow(0 0 8px var(--primary-glow));
+            animation: pulse-scale 2s infinite ease-in-out;
+        }
+
+        @keyframes pulse-scale {
+            0%, 100% { transform: scale(1); opacity: 0.65; }
+            50% { transform: scale(1.15); opacity: 1; }
+        }
+
+        /* NEON DIVIDER */
+        .job-separator {
+            height: 1px;
+            width: 100%;
+            background: var(--primary);
+            box-shadow: 0 0 4px var(--primary-glow);
+            transition: var(--transition-smooth);
+        }
+
+        .job-separator.completed {
+            background: var(--success);
+            box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+        }
+
+        .job-separator.failed {
+            background: var(--danger);
+            box-shadow: 0 0 4px rgba(239, 68, 68, 0.4);
+        }
+
+        .job-header {
+            display: none;
+        }
+
+        .job-body {
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .job-title-prompt-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+            width: 100%;
+        }
+
+        .job-title-prompt {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex-grow: 1;
+            line-height: 1.3;
+        }
+
+        .job-sub-specs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+        }
+
+        .spec-chip {
+            background: rgba(255, 255, 255, 0.04);
+            border: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 3px;
+            text-transform: uppercase;
+        }
+
+        .job-status-badge {
+            position: absolute;
+            top: 6px;
+            left: 6px;
+            padding: 3px 6px;
+            border-radius: 3px;
+            font-size: 0.68rem;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            z-index: 5;
+        }
+
+        .badge-running {
+            background: #bef264; /* Lime green */
+            color: #1a2e05;
+        }
+
+        .badge-completed {
+            background: var(--success);
+            color: #042f2e;
+        }
+
+        .badge-failed {
+            background: var(--danger);
+            color: #450a0a;
+        }
+
+        /* PROGRESS BAR */
+        .progress-container {
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .progress-header-info {
+            display: flex;
+            justify-content: space-between;
+            font-size: 0.68rem;
+            font-weight: 500;
+        }
+
+        .progress-pct {
+            font-weight: 700;
+            color: var(--primary-light);
+        }
+
+        .progress-bar-bg {
+            height: 3px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 2px;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .progress-bar-fill {
+            height: 100%;
+            width: 0%;
+            background: linear-gradient(90deg, var(--primary) 0%, var(--secondary) 100%);
+            border-radius: 2px;
+            transition: width 0.4s ease;
+            box-shadow: 0 0 4px var(--primary-glow);
+        }
+
+        /* TERMINAL LOG CONSOLE */
+        .console-log {
+            background: #06080e;
+            border: 1px solid rgba(255, 255, 255, 0.03);
+            border-radius: 4px;
+            padding: 6px 8px;
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 0.68rem;
+            line-height: 1.4;
+            color: #bef264;
+            height: 60px;
+            max-height: 60px;
+            overflow-y: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 2px;
+        }
+
+        .console-line {
+            display: flex;
+            gap: 3px;
+        }
+
+        .console-time {
+            color: #4b5563;
+            user-select: none;
+            display: none;
+        }
+
+        .console-msg {
+            word-break: break-all;
+        }
+
+        .console-msg.success { color: var(--success); }
+        .console-msg.warning { color: var(--warning); }
+        .console-msg.error { color: var(--danger); }
+        .console-msg.info { color: #38bdf8; }
+
+        /* BANNER OVERLAY ACTIONS (on completed images) */
+        .banner-overlay-actions {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+            opacity: 0;
+            transition: var(--transition-smooth);
+            z-index: 3;
+        }
+
+        .job-banner-area:hover .banner-overlay-actions {
+            opacity: 1;
+        }
+
+        .btn-icon-action {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            color: white;
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-decoration: none;
+            font-size: 13px;
+        }
+
+        .btn-icon-action:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            transform: scale(1.1);
+        }
+
+        .job-close-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: rgba(15, 17, 26, 0.8);
+            border: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            transition: var(--transition-smooth);
+            z-index: 5;
+        }
+
+        .job-close-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        .btn-copy-inline {
+            background: transparent;
+            border: none;
+            color: var(--text-muted);
+            cursor: pointer;
+            font-size: 0.75rem;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 2px;
+            border-radius: 3px;
+            transition: var(--transition-smooth);
+            flex-shrink: 0;
+        }
+
+        .btn-copy-inline:hover {
+            color: var(--primary-light);
+            background: rgba(255, 255, 255, 0.05);
+        }
+
+        /* TAB: GALLERY - same style as job cards */
+        .gallery-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 6px;
+        }
+
+        .gallery-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 6px;
+            overflow: hidden;
+            position: relative;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.25);
+            transition: var(--transition-smooth);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .gallery-card:hover {
+            border-color: var(--panel-border-glow);
+        }
+
+        .gallery-banner {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #141724;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .gallery-banner img,
+        .gallery-banner video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            border: none;
+        }
+
+        .gallery-banner-actions {
+            position: absolute;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.6);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            opacity: 0;
+            transition: var(--transition-smooth);
+            z-index: 3;
+        }
+
+        .gallery-banner:hover .gallery-banner-actions {
+            opacity: 1;
+        }
+
+        .gallery-card-sep {
+            height: 1px;
+            width: 100%;
+            background: var(--success);
+            box-shadow: 0 0 4px rgba(16, 185, 129, 0.4);
+        }
+
+        .gallery-card-body {
+            padding: 8px 10px;
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+        }
+
+        .gallery-card-prompt-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 4px;
+        }
+
+        .gallery-card-prompt {
+            font-size: 0.85rem;
+            font-weight: 600;
+            color: var(--text-main);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
+            flex-grow: 1;
+            line-height: 1.3;
+        }
+
+        .gallery-card-specs {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 3px;
+        }
+
+        .gallery-close-btn {
+            position: absolute;
+            top: 6px;
+            right: 6px;
+            background: rgba(15, 17, 26, 0.8);
+            border: 1px solid var(--panel-border);
+            color: var(--text-muted);
+            font-size: 0.7rem;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            width: 20px;
+            height: 20px;
+            border-radius: 4px;
+            transition: var(--transition-smooth);
+            z-index: 5;
+        }
+
+        .gallery-close-btn:hover {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: var(--danger);
+            color: var(--danger);
+        }
+
+        /* LIGHTBOX OVERLAY */
+        .lightbox {
+            position: fixed;
+            inset: 0;
+            background: rgba(3, 4, 8, 0.95);
+            z-index: 100;
+            display: none;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            backdrop-filter: blur(10px);
+        }
+
+        .lightbox-close {
+            position: absolute;
+            top: 25px;
+            right: 25px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid var(--panel-border);
+            color: white;
+            width: 44px;
+            height: 44px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            font-size: 20px;
+            transition: var(--transition-smooth);
+        }
+
+        .lightbox-close:hover {
+            background: var(--danger);
+            border-color: var(--danger);
+        }
+
+        .lightbox-content {
+            display: flex;
+            max-width: 1200px;
+            width: 100%;
+            height: auto;
+            max-height: 90vh;
+            background: var(--bg-workspace);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 30px 60px rgba(0, 0, 0, 0.6);
+            animation: scale-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .lightbox-img-pane {
+            flex-grow: 1;
+            background: black;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+            position: relative;
+            aspect-ratio: 16/9;
+        }
+
+        .lightbox-img-pane img,
+        .lightbox-img-pane video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+            border: none;
+            background: #000;
+        }
+
+        .lightbox-info-pane {
+            width: 380px;
+            min-width: 380px;
+            border-left: 1px solid var(--panel-border);
+            padding: 30px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        .lightbox-title {
+            font-size: 1.1rem;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            background: linear-gradient(135deg, var(--text-main) 0%, var(--primary-light) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+        }
+
+        .lightbox-detail-grid {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .lightbox-detail-item {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .lightbox-detail-label {
+            font-size: 0.65rem;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            letter-spacing: 1px;
+            font-weight: 600;
+        }
+
+        .lightbox-detail-value {
+            font-size: 0.85rem;
+            color: var(--text-main);
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--panel-border);
+            padding: 8px 10px;
+            border-radius: 6px;
+            word-break: break-word;
+        }
+
+        .lightbox-actions {
+            margin-top: auto;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+
+        .btn-lightbox-action {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 8px;
+            padding: 12px;
+            border-radius: 8px;
+            font-weight: 700;
+            text-decoration: none;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            font-size: 0.9rem;
+            border: none;
+        }
+
+        .btn-lightbox-download {
+            background: var(--primary);
+            color: white;
+        }
+
+        .btn-lightbox-download:hover {
+            background: var(--primary-light);
+            box-shadow: 0 0 15px var(--primary-glow);
+        }
+
+        .btn-lightbox-delete {
+            background: rgba(239, 68, 68, 0.1);
+            color: var(--danger);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+        }
+
+        .btn-lightbox-delete:hover {
+            background: var(--danger);
+            color: white;
+            border-color: var(--danger);
+        }
+
+        /* TAB: PROMPTS MANAGER */
+        .prompt-manager-container {
+            display: grid;
+            grid-template-columns: 320px 1fr;
+            gap: 25px;
+            max-width: 100%;
+        }
+
+        .prompt-editor-sidebar {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 16px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            height: fit-content;
+        }
+
+        .prompts-list-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+            gap: 15px;
+        }
+
+        .prompt-user-card {
+            background: var(--panel-bg);
+            border: 1px solid var(--panel-border);
+            border-radius: 12px;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+            transition: var(--transition-smooth);
+        }
+
+        .prompt-user-card:hover {
+            border-color: var(--panel-border-glow);
+            transform: translateY(-2px);
+        }
+
+        .prompt-user-card-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .prompt-tag {
+            font-size: 0.6rem;
+            padding: 2px 6px;
+            border-radius: 4px;
+            font-weight: 700;
+            background: rgba(6, 182, 212, 0.1);
+            color: var(--secondary-light);
+            border: 1px solid rgba(6, 182, 212, 0.2);
+            text-transform: uppercase;
+        }
+
+        .prompt-user-body {
+            font-size: 0.8rem;
+            color: var(--text-main);
+            line-height: 1.4;
+            flex-grow: 1;
+            word-break: break-word;
+        }
+
+        .prompt-user-actions {
+            display: flex;
+            gap: 6px;
+            border-top: 1px solid var(--panel-border);
+            padding-top: 10px;
+            margin-top: auto;
+        }
+
+        .prompt-action-btn {
+            flex-grow: 1;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--panel-border);
+            border-radius: 4px;
+            color: var(--text-main);
+            padding: 6px;
+            font-size: 0.7rem;
+            font-weight: 700;
+            cursor: pointer;
+            transition: var(--transition-smooth);
+            text-align: center;
+            text-transform: uppercase;
+        }
+
+        .prompt-action-btn:hover {
+            background: var(--primary);
+            border-color: var(--primary);
+            color: white;
+        }
+
+        /* RESPONSIVE DESIGN & SCROLL FIX */
+        @media (max-width: 1024px) {
+            .app-container {
+                height: auto;
+                max-height: none;
+            }
+            .workspace {
+                flex-direction: column;
+                height: auto;
+                overflow: visible;
+            }
+            .sidebar {
+                width: 100%;
+                min-width: 100%;
+                border-right: none;
+                border-bottom: 1px solid var(--panel-border);
+                overflow-y: visible;
+            }
+            .btn-generate {
+                padding: 12px 14px;
+                font-size: 0.9rem;
+                border-radius: 8px;
+                margin-top: 8px;
+            }
+            .main-stage {
+                height: auto;
+                overflow: visible;
+            }
+            .tab-content {
+                overflow-y: visible; /* Scroll is handled at page level, resolving overlaps */
+                padding: 6px 10px 20px 10px;
+            }
+            .tabs-header {
+                position: sticky;
+                top: 0;
+                z-index: 5;
+                background: rgba(8, 10, 18, 0.95);
+                backdrop-filter: blur(10px);
+                margin: 10px 10px 4px 10px;
+                border-radius: 8px;
+                width: auto;
+                max-width: calc(100% - 20px);
+                overflow-x: auto;
+                display: flex;
+                flex-wrap: nowrap;
+                scrollbar-width: none;
+            }
+            .tabs-header::-webkit-scrollbar {
+                display: none;
+            }
+            .prompt-manager-container {
+                grid-template-columns: 1fr;
+            }
+            .lightbox-content {
+                flex-direction: column;
+                height: auto;
+                max-height: 95vh;
+            }
+            .lightbox-info-pane {
+                width: 100%;
+                min-width: 100%;
+                border-left: none;
+                border-top: 1px solid var(--panel-border);
+            }
+        }
+
+        @media (max-width: 580px) {
+            .app-header {
+                padding: 10px 15px;
+            }
+            .tab-btn {
+                padding: 12px 14px;
+                font-size: 0.8rem;
+            }
+            .tab-count {
+                font-size: 0.65rem;
+            }
+            .lightbox {
+                padding: 10px;
+            }
+            .job-grid,
+            .gallery-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+        }
+    </style>
+</head>
+<body>
+
+    {% if not logged_in %}
+    <!-- LOGIN PAGE VIEW -->
+    <div class="login-wrapper">
+        <div class="login-card" id="loginCard">
+            <div class="login-logo">Wild Owl</div>
+            <div class="login-sub">Cinematic Studio</div>
+            
+            <form class="login-form" id="loginForm" onsubmit="handleLogin(event)">
+                <div class="input-group">
+                    <label class="input-label" for="passwordInput">Giriş Şifresi</label>
+                    <input class="form-input" type="password" id="passwordInput" placeholder="••••••••" required autofocus autocomplete="current-password">
+                </div>
+                <button class="btn-submit" type="submit">Giriş Yap</button>
+            </form>
+            <div class="login-error" id="loginError">Hatalı şifre! Lütfen tekrar deneyin.</div>
+        </div>
+    </div>
+
+    <script>
+        function handleLogin(e) {
+            e.preventDefault();
+            const password = document.getElementById('passwordInput').value;
+            const errorDiv = document.getElementById('loginError');
+            const card = document.getElementById('loginCard');
+            
+            errorDiv.style.display = 'none';
+            card.classList.remove('shake');
+            
+            const formData = new FormData();
+            formData.append('password', password);
+            
+            fetch('/login', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => {
+                if(res.ok) {
+                    window.location.reload();
+                } else {
+                    card.classList.add('shake');
+                    errorDiv.style.display = 'block';
+                }
+            })
+            .catch(() => {
+                card.classList.add('shake');
+                errorDiv.textContent = 'Bağlantı hatası!';
+                errorDiv.style.display = 'block';
+            });
+        }
+    </script>
+
+    {% else %}
+    <!-- WORKSPACE VIEW -->
+    <div class="app-container">
+        
+        <!-- Header -->
+        <header class="app-header">
+            <div class="brand">
+                <div class="brand-logo">🐰</div>
+                <div class="brand-text">
+                    <h1>Wild Owl</h1>
+                    <p>Cinematic Studio</p>
+                </div>
+            </div>
+            
+            <div class="header-actions">
+                <a href="/logout" class="btn-logout">Çıkış Yap</a>
+            </div>
+        </header>
+        
+        <!-- Main Workspace -->
+        <div class="workspace">
+            
+            <!-- Left Control Sidebar -->
+            <aside class="sidebar">
+                
+                <!-- References Upload -->
+                <div>
+                    <div class="section-title">
+                        <span>Referans Görseller</span>
+                        <span style="font-size: 0.7rem; color: var(--text-dark);" id="uploadCount">0/3</span>
+                    </div>
+                    
+                    <!-- Full Dropzone (shown when files count is 0) -->
+                    <div class="dropzone" id="dropzone" onclick="document.getElementById('fileInput').click()">
+                        <div class="dropzone-icon">📤</div>
+                        <div class="dropzone-text">Görsel sürükle veya tıklayarak seç</div>
+                        <div class="dropzone-sub">Maksimum 3 adet görsel (JPG, PNG)</div>
+                    </div>
+                    
+                    <input type="file" id="fileInput" multiple accept="image/*" style="display: none;" onchange="handleFileSelect(event)">
+                    
+                    <!-- Thumbnail preview grid with plus box (shown when >= 1 files) -->
+                    <div class="upload-previews" id="uploadPreviews" style="display: none;">
+                        <!-- Generated Dynamically -->
+                    </div>
+                </div>
+                
+                <!-- Model Grid Selection -->
+                <div>
+                    <div class="section-title">Model Seçimi</div>
+                    <div class="select-grid" id="modelsGrid">
+                        <!-- Dynamic models injected here -->
+                    </div>
+                </div>
+                
+                <!-- Aspect Ratios -->
+                <div>
+                    <div class="section-title">En Boy Oranı (Aspect Ratio)</div>
+                    <div class="chips-container" id="aspectContainer">
+                        <!-- Dynamic chips injected here -->
+                    </div>
+                </div>
+                
+                <!-- Tiers -->
+                <div>
+                    <div class="section-title">Tier (Kalite Seviyesi)</div>
+                    <div class="chips-container" id="tierContainer">
+                        <!-- Dynamic chips injected here -->
+                    </div>
+                </div>
+                
+                <!-- Resolution -->
+                <div id="resolutionSection" style="display:none">
+                    <div class="section-title">Çözünürlük</div>
+                    <div class="chips-container" id="resolutionContainer">
+                        <!-- Dynamic chips injected here -->
+                    </div>
+                </div>
+                
+                <!-- Prompt Area -->
+                <div>
+                    <div class="section-title">Yaratıcı Komut (Prompt)</div>
+                    <textarea class="prompt-textarea" id="promptInput" placeholder="A cinematic shot of a neon rabbit running through a rainy cyberpunk street, high detailed, unreal engine 5 render, anamorphic lens flare..."></textarea>
+                </div>
+                
+                <!-- Image Count Slider -->
+                <div>
+                    <div class="section-title">Görsel Sayısı</div>
+                    <div class="slider-wrapper">
+                        <input class="slider-input" type="range" id="numImagesInput" min="1" max="4" value="1" oninput="document.getElementById('sliderVal').textContent = this.value">
+                        <div class="slider-val" id="sliderVal">1</div>
+                    </div>
+                </div>
+                
+                <!-- Generate Button -->
+                <button class="btn-generate" id="generateBtn" onclick="triggerGeneration()">
+                    <span>Görsel Üret (Generate)</span>
+                    <span id="btnIcon">⚡</span>
+                </button>
+                
+            </aside>
+            
+            <!-- Right Stage Pane -->
+            <main class="main-stage">
+                
+                <!-- Tabs navigation -->
+                <div class="tabs-header">
+                    <button class="tab-btn active" onclick="switchTab('generations')">
+                        <span>Aktif Üretimler</span>
+                        <span class="tab-count" id="activeJobsCount">0</span>
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('gallery')">
+                        <span>Galeri</span>
+                        <span class="tab-count" id="galleryCount">0</span>
+                    </button>
+                    <button class="tab-btn" onclick="switchTab('prompts')">
+                        <span>Promptlar</span>
+                    </button>
+                </div>
+                
+                <!-- TAB: GENERATIONS -->
+                <div class="tab-content active" id="tab-generations">
+                    <div class="tab-actions-row">
+                        <button class="btn-logout" id="clearGenerationsBtn" onclick="clearAllGenerations()" style="display: none;">Tümünü Sil</button>
+                    </div>
+                    <div class="empty-state" id="generationsEmpty">
+                        <div class="empty-icon">🎬</div>
+                        <div class="empty-title">Henüz aktif bir üretim yok</div>
+                        <p>Sol taraftaki panelden ayarları yapılandırıp prompt yazdıktan sonra "Görsel Üret" butonuna basarak işlemleri başlatabilirsiniz. Birden fazla üretimi eşzamanlı gerçekleştirebilirsiniz.</p>
+                    </div>
+                    <div class="job-grid" id="jobGrid">
+                        <!-- Dynamic active job grid goes here -->
+                    </div>
+                </div>
+                
+                <!-- TAB: GALLERY -->
+                <div class="tab-content" id="tab-gallery">
+                    <div class="tab-actions-row">
+                        <button class="btn-logout" id="clearGalleryBtn" onclick="clearAllHistory()" style="display: none;">Tümünü Temizle</button>
+                    </div>
+                    
+                    <div class="empty-state" id="galleryEmpty">
+                        <div class="empty-icon">🎨</div>
+                        <div class="empty-title">Galeri boş</div>
+                        <p>Henüz üretilmiş görsel bulunmuyor. Üretilen görseller geçici bellek (RAM) galerisine kaydedilecektir.</p>
+                    </div>
+                    <div class="gallery-grid" id="galleryGrid">
+                        <!-- Gallery items go here -->
+                    </div>
+                </div>
+                
+                <!-- TAB: PROMPTS -->
+                <div class="tab-content" id="tab-prompts">
+                    <div class="tab-actions-row">
+                        <button class="btn-logout" id="clearPromptsBtn" onclick="clearAllPrompts()" style="display: none;">🗑️ Tümünü Sil</button>
+                    </div>
+                    <div class="prompt-manager-container">
+                        
+                        <!-- Sidebar Editor Form -->
+                        <div class="prompt-editor-sidebar">
+                            <h3 class="section-title" id="pmFormTitle">Yeni Prompt Ekle</h3>
+                            <input type="hidden" id="pmPromptId" value="">
+                            
+                            <div class="input-group">
+                                <label class="input-label">Kategori / Etiket</label>
+                                <input class="form-input" type="text" id="pmPromptTag" placeholder="Örn: Cinematic, Cyberpunk, 3D">
+                            </div>
+                            
+                            <div class="input-group">
+                                <label class="input-label">Prompt Metni</label>
+                                <textarea class="prompt-textarea" id="pmPromptText" placeholder="A detailed description of the scene..."></textarea>
+                            </div>
+                            
+                            <button class="btn-submit" id="pmSaveBtn" onclick="savePrompt()">Kaydet</button>
+                            <button class="btn-submit" id="pmCancelBtn" onclick="resetPromptForm()" style="display: none; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border); margin-top: 5px;">Vazgeç</button>
+                        </div>
+                        
+                        <!-- Saved Prompts Grid -->
+                        <div>
+                            <div class="empty-state" id="promptsEmpty" style="margin: 0 auto; max-width: 100%;">
+                                <div class="empty-icon">📖</div>
+                                <div class="empty-title">Prompt Kütüphanesi Boş</div>
+                                <p>Sol taraftaki editörü kullanarak kendi promptlarınızı kaydedebilir, sonrasında bunları tek tıkla stüdyoda kullanabilirsiniz.</p>
+                            </div>
+                            <div class="prompts-list-grid" id="promptsListGrid">
+                                <!-- Saved custom prompts will render here -->
+                            </div>
+                        </div>
+                        
+                    </div>
+                </div>
+                
+            </main>
+        </div>
+        
+    </div>
+
+    <!-- LIGHTBOX TEMPLATE -->
+    <div class="lightbox" id="lightbox" onclick="handleLightboxBgClick(event)">
+        <button class="lightbox-close" onclick="closeLightbox()">✕</button>
+        <div class="lightbox-content" onclick="event.stopPropagation()">
+            <div class="lightbox-img-pane" id="lightboxMediaPane">
+                <img id="lightboxImg" src="" alt="Zoomed Output">
+            </div>
+            <div class="lightbox-info-pane">
+                <div class="lightbox-title">Görsel Ayrıntıları</div>
+                
+                <div class="lightbox-detail-grid">
+                    <div class="lightbox-detail-item">
+                        <div class="lightbox-detail-label">Model</div>
+                        <div class="lightbox-detail-value" id="lb-model">Flux 2</div>
+                    </div>
+                    <div class="lightbox-detail-item">
+                        <div class="lightbox-detail-label">Komut (Prompt)</div>
+                        <div class="lightbox-detail-value" id="lb-prompt">A cute rabbit...</div>
+                    </div>
+                    <div class="lightbox-detail-item">
+                        <div class="lightbox-detail-label">Çözünürlük ve Oran</div>
+                        <div class="lightbox-detail-value" id="lb-meta">Aspect Ratio: 1:1 | Tier: standard</div>
+                    </div>
+                    <div class="lightbox-detail-item">
+                        <div class="lightbox-detail-label">Oluşturulma Tarihi</div>
+                        <div class="lightbox-detail-value" id="lb-date">03.06.2026 18:00:00</div>
+                    </div>
+                </div>
+                
+                <div class="lightbox-actions">
+                    <!-- proxy force download endpoint -->
+                    <a href="" class="btn-lightbox-action btn-lightbox-download" id="lb-download">Görseli İndir</a>
+                    <button class="btn-lightbox-action btn-lightbox-delete" id="lb-delete-btn">Stüdyodan Sil</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- SCRIPTS -->
+    <script>
+        // Global variables
+        let modelsConfig = {};
+        let selectedModel = '';
+        let selectedRatio = '';
+        let selectedTier = '';
+        let uploadedFiles = [];
+        let activeJobs = 0;
+        let galleryItems = [];
+        let userPrompts = [];
+        const activeStreams = {};
+
+        // App Initialization
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchModels();
+            fetchHistory();
+            fetchPrompts();
+            fetchActiveJobs();
+            
+            // Drag and drop events
+            const dropzone = document.getElementById('dropzone');
+            
+            ['dragenter', 'dragover'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.add('dragover');
+                }, false);
+            });
+            
+            ['dragleave', 'drop'].forEach(eventName => {
+                dropzone.addEventListener(eventName, (e) => {
+                    e.preventDefault();
+                    dropzone.classList.remove('dragover');
+                }, false);
+            });
+            
+            dropzone.addEventListener('drop', (e) => {
+                const dt = e.dataTransfer;
+                const files = dt.files;
+                handleFiles(files);
+            });
+        });
+
+        // Tab Switcher
+        function switchTab(tabName) {
+            document.querySelectorAll('.tab-btn').forEach(btn => {
+                btn.classList.remove('active');
+            });
+            document.querySelectorAll('.tab-content').forEach(content => {
+                content.classList.remove('active');
+            });
+            
+            const activeBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.innerText.toLowerCase().includes(tabName === 'generations' ? 'aktif' : tabName === 'gallery' ? 'galeri' : 'prompt'));
+            if(activeBtn) activeBtn.classList.add('active');
+            
+            const targetContent = document.getElementById(`tab-${tabName}`);
+            if(targetContent) targetContent.classList.add('active');
+        }
+
+        // Fetch Models Config
+        function fetchModels() {
+            fetch('/api/models')
+            .then(res => res.json())
+            .then(data => {
+                modelsConfig = data;
+                renderModels();
+            })
+            .catch(err => console.error("Model verisi yüklenemedi:", err));
+        }
+
+        // Render Model Cards
+        function renderModels() {
+            const grid = document.getElementById('modelsGrid');
+            grid.innerHTML = '';
+            
+            let first = true;
+            for (const [name, config] of Object.entries(modelsConfig)) {
+                const card = document.createElement('div');
+                card.className = `select-card ${first ? 'active' : ''}`;
+                card.setAttribute('data-model', name);
+                card.onclick = () => selectModel(name);
+                
+                const isVid = config.type === 'video';
+                card.innerHTML = `
+                    <div class="select-card-name">${name} ${isVid ? '🎬' : ''}</div>
+                    <div class="select-card-detail">${isVid ? 'Video Üretimi' : 'Çözünürlük: ' + config.resolution}</div>
+                `;
+                grid.appendChild(card);
+                
+                if(first) {
+                    selectedModel = name;
+                    updateModelOptions(name);
+                    first = false;
+                }
+            }
+        }
+
+        // Select Model Handler
+        function selectModel(name) {
+            document.querySelectorAll('#modelsGrid .select-card').forEach(card => {
+                if (card.getAttribute('data-model') === name) {
+                    card.classList.add('active');
+                } else {
+                    card.classList.remove('active');
+                }
+            });
+            
+            selectedModel = name;
+            updateModelOptions(name);
+        }
+
+        // Update Aspect Ratio and Tier Options
+        function updateModelOptions(name) {
+            const config = modelsConfig[name];
+            
+            const btnText = document.querySelector('#generateBtn span:first-child');
+            if (btnText) {
+                btnText.textContent = config.type === 'video' ? 'Video Üret (Generate)' : 'Görsel Üret (Generate)';
+            }
+            
+            // Ratios
+            const aspectContainer = document.getElementById('aspectContainer');
+            aspectContainer.innerHTML = '';
+            
+            config.aspect_ratios.forEach((ratio, idx) => {
+                const chip = document.createElement('div');
+                chip.className = `chip ${idx === 0 ? 'active' : ''}`;
+                if(idx === 0) selectedRatio = ratio;
+                chip.onclick = () => {
+                    document.querySelectorAll('#aspectContainer .chip').forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    selectedRatio = ratio;
+                };
+                
+                // Visual ratio indicator
+                const parts = ratio.split(':').map(Number);
+                let w = 12, h = 12;
+                if (parts.length === 2) {
+                    const max = Math.max(parts[0], parts[1]);
+                    w = Math.round((parts[0] / max) * 14);
+                    h = Math.round((parts[1] / max) * 14);
+                }
+                
+                chip.innerHTML = `
+                    <span class="ratio-visual" style="width: ${w}px; height: ${h}px;"></span>
+                    <span>${ratio}</span>
+                `;
+                aspectContainer.appendChild(chip);
+            });
+            
+            // Tiers
+            const tierContainer = document.getElementById('tierContainer');
+            tierContainer.innerHTML = '';
+            
+            config.tiers.forEach((tier, idx) => {
+                const chip = document.createElement('div');
+                chip.className = `chip ${idx === 0 ? 'active' : ''}`;
+                if(idx === 0) selectedTier = tier;
+                chip.onclick = () => {
+                    document.querySelectorAll('#tierContainer .chip').forEach(c => c.classList.remove('active'));
+                    chip.classList.add('active');
+                    selectedTier = tier;
+                };
+                const labels = config.tier_labels || {};
+                chip.textContent = labels[tier] ? `${labels[tier]} (${tier.toUpperCase()})` : tier.toUpperCase();
+                tierContainer.appendChild(chip);
+            });
+            
+            // Resolutions
+            const resSection = document.getElementById('resolutionSection');
+            const resContainer = document.getElementById('resolutionContainer');
+            resContainer.innerHTML = '';
+            selectedResolution = null;
+            if (config.resolutions && config.resolutions.length > 0) {
+                resSection.style.display = '';
+                config.resolutions.forEach((res, idx) => {
+                    const chip = document.createElement('div');
+                    chip.className = `chip ${idx === 0 ? 'active' : ''}`;
+                    if (idx === 0) selectedResolution = res;
+                    chip.onclick = () => {
+                        document.querySelectorAll('#resolutionContainer .chip').forEach(c => c.classList.remove('active'));
+                        chip.classList.add('active');
+                        selectedResolution = res;
+                    };
+                    chip.textContent = res;
+                    resContainer.appendChild(chip);
+                });
+            } else {
+                resSection.style.display = 'none';
+            }
+        }
+
+        // Handle File Drag / Click select
+        function handleFileSelect(e) {
+            const files = e.target.files;
+            handleFiles(files);
+        }
+
+        function handleFiles(files) {
+            const total = uploadedFiles.length + files.length;
+            if (total > 3) {
+                alert("Maksimum 3 adet referans görsel yükleyebilirsiniz.");
+                return;
+            }
+            
+            for (let i = 0; i < files.length; i++) {
+                const file = files[i];
+                if (!file.type.startsWith('image/')) continue;
+                uploadedFiles.push(file);
+            }
+            
+            renderPreviews();
+        }
+
+        // Render Previews with Tile UI & Plus Card
+        function renderPreviews() {
+            const dropzone = document.getElementById('dropzone');
+            const previewsContainer = document.getElementById('uploadPreviews');
+            
+            if (uploadedFiles.length === 0) {
+                dropzone.style.display = 'block';
+                previewsContainer.style.display = 'none';
+                previewsContainer.innerHTML = '';
+            } else {
+                dropzone.style.display = 'none';
+                previewsContainer.style.display = 'grid';
+                previewsContainer.innerHTML = '';
+                
+                // Show uploaded image boxes
+                uploadedFiles.forEach((file, idx) => {
+                    const box = document.createElement('div');
+                    box.className = 'preview-box';
+                    
+                    const img = document.createElement('img');
+                    
+                    const reader = new FileReader();
+                    reader.onload = (e) => { img.src = e.target.result; };
+                    reader.readAsDataURL(file);
+                    
+                    const removeBtn = document.createElement('button');
+                    removeBtn.className = 'preview-remove';
+                    removeBtn.innerHTML = '✕';
+                    removeBtn.onclick = (e) => {
+                        e.stopPropagation();
+                        uploadedFiles.splice(idx, 1);
+                        renderPreviews();
+                    };
+                    
+                    box.appendChild(img);
+                    box.appendChild(removeBtn);
+                    previewsContainer.appendChild(box);
+                });
+                
+                // Show dynamic plus box tile if files count < 3
+                if (uploadedFiles.length < 3) {
+                    const plusBox = document.createElement('div');
+                    plusBox.className = 'preview-box';
+                    plusBox.style.cursor = 'pointer';
+                    plusBox.style.display = 'flex';
+                    plusBox.style.alignItems = 'center';
+                    plusBox.style.justifyContent = 'center';
+                    plusBox.style.border = '2px dashed var(--panel-border)';
+                    plusBox.style.background = 'rgba(255, 255, 255, 0.02)';
+                    plusBox.onclick = () => document.getElementById('fileInput').click();
+                    
+                    plusBox.innerHTML = '<span style="font-size: 20px; color: var(--primary-light);">+</span>';
+                    previewsContainer.appendChild(plusBox);
+                }
+            }
+            
+            document.getElementById('uploadCount').textContent = `${uploadedFiles.length}/3`;
+        }
+
+        // Copy prompt helper to clipboard
+        function copyPromptToClipboard(text) {
+            navigator.clipboard.writeText(text)
+            .then(() => alert("Prompt panoya kopyalandı!"))
+            .catch(() => alert("Kopyalama başarısız oldu."));
+        }
+
+        // Start Generation Action
+        function triggerGeneration() {
+            const prompt = document.getElementById('promptInput').value.trim();
+            if (!prompt) {
+                alert("Lütfen üretmek istediğiniz görsel için bir komut (prompt) yazın!");
+                return;
+            }
+            
+            const generateBtn = document.getElementById('generateBtn');
+            const btnIcon = document.getElementById('btnIcon');
+            generateBtn.disabled = true;
+            generateBtn.style.opacity = '0.7';
+            btnIcon.style.animation = 'rotate-spinner 1s linear infinite';
+            
+            const formData = new FormData();
+            formData.append('prompt', prompt);
+            formData.append('model', selectedModel);
+            formData.append('aspect_ratio', selectedRatio);
+            formData.append('tier', selectedTier);
+            if (selectedResolution) formData.append('resolution', selectedResolution);
+            formData.append('num_images', document.getElementById('numImagesInput').value);
+            
+            uploadedFiles.forEach((file, idx) => {
+                formData.append(`image_${idx+1}`, file);
+            });
+            
+            fetch('/api/generate/start', {
+                method: 'POST',
+                body: formData
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert("Başlatma Hatası: " + data.error);
+                    generateBtn.disabled = false;
+                    generateBtn.style.opacity = '1';
+                    btnIcon.style.animation = 'none';
+                    return;
+                }
+                
+                // Do NOT clear inputs anymore - inputs persist!
+                
+                // Read local object URL of the first reference image for banner
+                let refImgUrl = '';
+                if (uploadedFiles.length > 0) {
+                    refImgUrl = URL.createObjectURL(uploadedFiles[0]);
+                }
+                
+                // Switch tab and build job tracker
+                switchTab('generations');
+                createJobCard(data.job_id, prompt, selectedModel, selectedRatio, selectedTier, document.getElementById('numImagesInput').value, refImgUrl);
+                
+                activeJobs++;
+                document.getElementById('activeJobsCount').textContent = activeJobs;
+                connectToJobStream(data.job_id, prompt, selectedModel, selectedRatio, selectedTier);
+                
+                // Restore button
+                generateBtn.disabled = false;
+                generateBtn.style.opacity = '1';
+                btnIcon.style.animation = 'none';
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Sunucuya bağlanılamadı.");
+                generateBtn.disabled = false;
+                generateBtn.style.opacity = '1';
+                btnIcon.style.animation = 'none';
+            });
+        }
+
+        // Create Active Job Card (Grid-Layout based, matching reference design)
+        function createJobCard(jobId, prompt, model, ratio, tier, count, refImgUrl) {
+            document.getElementById('generationsEmpty').style.display = 'none';
+            document.getElementById('clearGenerationsBtn').style.display = 'block';
+            const grid = document.getElementById('jobGrid');
+            
+            const card = document.createElement('div');
+            card.className = 'job-card';
+            card.id = `job-${jobId}`;
+            
+            // Escape single quotes for inline JS safety
+            const safePrompt = prompt.replace(/'/g, "\\'");
+            
+            const isVidModel = model === 'Vibe Video' || (modelsConfig[model] && modelsConfig[model].type === 'video');
+            
+            let bannerHtml = '';
+            if (refImgUrl) {
+                const isVid = refImgUrl.endsWith('.mp4') || isVidModel;
+                if (isVid) {
+                    bannerHtml = `<video id="banner-img-${jobId}" src="${refImgUrl}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`;
+                } else {
+                    bannerHtml = `<img id="banner-img-${jobId}" src="${refImgUrl}" alt="Ref image">`;
+                }
+            } else {
+                bannerHtml = `
+                    <div id="banner-img-${jobId}" class="job-placeholder-banner" title="${isVidModel ? 'Video Üretiliyor...' : 'Görsel Üretiliyor...'}">
+                        <svg xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" class="placeholder-pulse-icon"><polygon points="23 7 16 12 23 17 23 7"></polygon><rect x="1" y="5" width="15" height="14" rx="2" ry="2"></rect></svg>
+                    </div>
+                `;
+            }
+            
+            card.innerHTML = `
+                <!-- Banner Area -->
+                <div class="job-banner-area">
+                    ${bannerHtml}
+                    <!-- Banner overlay actions (shown on completed, hover) -->
+                    <div class="banner-overlay-actions" id="banner-actions-${jobId}" style="display: none;"></div>
+                    <!-- Status Badge (Top-Left) -->
+                    <span class="job-status-badge badge-running" id="badge-${jobId}">PROCESSING</span>
+                    <!-- Close Button (Top-Right) -->
+                    <button class="job-close-btn" onclick="cancelAndRemoveJob('${jobId}')" title="Kapat / İptal Et">✕</button>
+                </div>
+                
+                <!-- Glowing Accent Divider -->
+                <div class="job-separator" id="sep-${jobId}"></div>
+                
+                <div class="job-body">
+                    <!-- Prompt Text and Copy Icon -->
+                    <div class="job-title-prompt-row">
+                        <div class="job-title-prompt" title="${prompt}">${prompt}</div>
+                        <button class="btn-copy-inline" onclick="copyPromptToClipboard('${safePrompt}')" title="Promptu Kopyala">
+                            <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                        </button>
+                    </div>
+                    
+                    <!-- Metadata Chips -->
+                    <div class="job-sub-specs">
+                        <span class="spec-chip">${isVidModel ? 'VIDEO' : 'IMAGE'}</span>
+                        <span class="spec-chip">${model}</span>
+                        <span class="spec-chip">${ratio}</span>
+                        <span class="spec-chip">${tier.toUpperCase()}</span>
+                    </div>
+
+                    <div class="progress-container">
+                        <div class="progress-header-info">
+                            <span id="progress-status-text-${jobId}">Kayıt Ediliyor</span>
+                            <span class="progress-pct" id="pct-${jobId}">0%</span>
+                        </div>
+                        <div class="progress-bar-bg">
+                            <div class="progress-bar-fill" id="fill-${jobId}" style="width: 0%;"></div>
+                        </div>
+                    </div>
+                    
+                    <!-- Console log terminal window -->
+                    <div class="console-log" id="console-${jobId}">
+                        <!-- Log messages will append here -->
+                    </div>
+                </div>
+            `;
+            
+            grid.insertBefore(card, grid.firstChild);
+        }
+
+        // Connect SSE progress reader to background job stream
+        function connectToJobStream(jobId, prompt, model, ratio, tier) {
+            const source = new EventSource(`/api/generate/stream/${jobId}`);
+            activeStreams[jobId] = source;
+            const consoleBox = document.getElementById(`console-${jobId}`);
+            const safePrompt = prompt.replace(/'/g, "\\'");
+            
+            function addLogLine(msg, status="info") {
+                if (!consoleBox) return;
+                const line = document.createElement('div');
+                line.className = 'console-line';
+                
+                const now = new Date();
+                const pad = (n) => String(n).padStart(2, '0');
+                const timeStr = `${pad(now.getHours())}:${pad(now.getMinutes())}:${pad(now.getSeconds())}`;
+                
+                line.innerHTML = `
+                    <span class="console-time">[${timeStr}]</span>
+                    <span class="console-msg ${status}">${msg}</span>
+                `;
+                consoleBox.appendChild(line);
+                consoleBox.scrollTop = consoleBox.scrollHeight;
+            }
+            
+            source.onmessage = (e) => {
+                const data = JSON.parse(e.data);
+                
+                if (data.type === 'log') {
+                    addLogLine(data.message, data.status);
+                    
+                    const pctVal = document.getElementById(`pct-${jobId}`);
+                    const fillBar = document.getElementById(`fill-${jobId}`);
+                    if (pctVal) pctVal.textContent = `${data.pct}%`;
+                    if (fillBar) fillBar.style.width = `${data.pct}%`;
+                    
+                    const badge = document.getElementById(`badge-${jobId}`);
+                    const statusText = document.getElementById(`progress-status-text-${jobId}`);
+                    
+                    if (badge && statusText) {
+                        if (data.status === 'registering') {
+                            badge.className = 'job-status-badge badge-running';
+                            badge.textContent = 'PROCESSING';
+                            statusText.textContent = 'Spamok E-Posta Doğrulaması';
+                        } else if (data.status === 'login') {
+                            statusText.textContent = 'Supabase Girişi';
+                        } else if (data.status === 'uploading') {
+                            statusText.textContent = 'Görsel Yükleniyor';
+                        } else if (data.status === 'generating') {
+                            badge.textContent = 'PROCESSING';
+                            statusText.textContent = 'Görsel Hesaplanıyor (Processing)';
+                        }
+                    }
+                } 
+                else if (data.type === 'completed') {
+                    source.close();
+                    delete activeStreams[jobId];
+                    
+                    activeJobs = Math.max(0, activeJobs - 1);
+                    document.getElementById('activeJobsCount').textContent = activeJobs;
+                    
+                    const badge = document.getElementById(`badge-${jobId}`);
+                    if (badge) {
+                        badge.className = 'job-status-badge badge-completed';
+                        badge.textContent = 'COMPLETED';
+                    }
+                    
+                    const sep = document.getElementById(`sep-${jobId}`);
+                    if (sep) sep.className = 'job-separator completed';
+                    
+                    const statusText = document.getElementById(`progress-status-text-${jobId}`);
+                    const pctVal = document.getElementById(`pct-${jobId}`);
+                    const fillBar = document.getElementById(`fill-${jobId}`);
+                    
+                    if (statusText) statusText.textContent = 'Üretim Tamamlandı';
+                    if (pctVal) pctVal.textContent = `100%`;
+                    if (fillBar) fillBar.style.width = `100%`;
+                    
+                    if (data.outputs.length > 0) {
+                        const bannerImg = document.getElementById(`banner-img-${jobId}`);
+                        const outputUrl = data.outputs[0];
+                        const isVideo = outputUrl.includes('.mp4') || model === 'Vibe Video';
+                        
+                        if (bannerImg) {
+                            if (isVideo) {
+                                const vid = document.createElement('video');
+                                vid.id = `banner-img-${jobId}`;
+                                vid.src = outputUrl;
+                                vid.autoplay = true;
+                                vid.loop = true;
+                                vid.muted = true;
+                                vid.playsInline = true;
+                                vid.style.width = '100%';
+                                vid.style.height = '100%';
+                                vid.style.objectFit = 'cover';
+                                bannerImg.replaceWith(vid);
+                            } else {
+                                if (bannerImg.tagName === 'IMG') {
+                                    bannerImg.src = outputUrl;
+                                } else {
+                                    const img = document.createElement('img');
+                                    img.id = `banner-img-${jobId}`;
+                                    img.src = outputUrl;
+                                    img.alt = "Generated image";
+                                    bannerImg.replaceWith(img);
+                                }
+                            }
+                        }
+                        
+                        const bannerActions = document.getElementById(`banner-actions-${jobId}`);
+                        if (bannerActions) {
+                            const firstUrl = data.outputs[0];
+                            const downloadUrl = `/api/download?url=${encodeURIComponent(firstUrl)}`;
+                            bannerActions.innerHTML = `
+                                <button class="btn-icon-action" onclick="openLightbox('${firstUrl}', '${safePrompt}', '${model}', '${ratio}', '${tier}', '')" title="Büyüt">👁️</button>
+                                <a href="${downloadUrl}" class="btn-icon-action" title="İndir">💾</a>
+                            `;
+                            bannerActions.style.display = 'flex';
+                        }
+                    }
+                    
+                    fetchHistory();
+                } 
+                else if (data.type === 'failed') {
+                    source.close();
+                    delete activeStreams[jobId];
+                    
+                    activeJobs = Math.max(0, activeJobs - 1);
+                    document.getElementById('activeJobsCount').textContent = activeJobs;
+                    
+                    const badge = document.getElementById(`badge-${jobId}`);
+                    if (badge) {
+                        badge.className = 'job-status-badge badge-failed';
+                        badge.textContent = 'FAILED';
+                    }
+                    
+                    const sep = document.getElementById(`sep-${jobId}`);
+                    if (sep) sep.className = 'job-separator failed';
+                    
+                    const statusText = document.getElementById(`progress-status-text-${jobId}`);
+                    const fillBar = document.getElementById(`fill-${jobId}`);
+                    
+                    if (statusText) statusText.textContent = 'Başarısız: ' + data.error;
+                    if (fillBar) {
+                        fillBar.style.backgroundColor = 'var(--danger)';
+                        fillBar.style.backgroundImage = 'none';
+                    }
+                    
+                    addLogLine("Hata: " + data.error, "error");
+                }
+            };
+            
+            source.onerror = (err) => {
+                console.error("EventSource error:", err);
+                source.close();
+                delete activeStreams[jobId];
+                
+                activeJobs = Math.max(0, activeJobs - 1);
+                document.getElementById('activeJobsCount').textContent = activeJobs;
+                
+                const badge = document.getElementById(`badge-${jobId}`);
+                if (badge) {
+                    badge.className = 'job-status-badge badge-failed';
+                    badge.innerHTML = '<span>Bağlantı Kesildi</span>';
+                }
+                
+                addLogLine("Kanal bağlantısı koptu veya hata oluştu.", "error");
+            };
+        }
+
+        // Fetch active jobs from server and draw them on screen
+        function fetchActiveJobs() {
+            fetch('/api/generate/active')
+            .then(res => res.json())
+            .then(jobs => {
+                let runningCount = 0;
+                const jobIds = Object.keys(jobs);
+                if (jobIds.length > 0) {
+                    document.getElementById('clearGenerationsBtn').style.display = 'block';
+                    document.getElementById('generationsEmpty').style.display = 'none';
+                } else {
+                    document.getElementById('clearGenerationsBtn').style.display = 'none';
+                    document.getElementById('generationsEmpty').style.display = 'flex';
+                }
+                for (const [jobId, job] of Object.entries(jobs)) {
+                    createJobCard(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.num_images, job.outputs.length > 0 ? job.outputs[0] : null);
+                    
+                    const consoleBox = document.getElementById(`console-${jobId}`);
+                    const badge = document.getElementById(`badge-${jobId}`);
+                    const statusText = document.getElementById(`progress-status-text-${jobId}`);
+                    const pctText = document.getElementById(`pct-${jobId}`);
+                    const fillBar = document.getElementById(`fill-${jobId}`);
+                    const sep = document.getElementById(`sep-${jobId}`);
+                    
+                    if (consoleBox) {
+                        job.logs.forEach(log => {
+                            const line = document.createElement('div');
+                            line.className = 'console-line';
+                            line.innerHTML = `
+                                <span class="console-time">[${log.time}]</span>
+                                <span class="console-msg ${log.status}">${log.message}</span>
+                            `;
+                            consoleBox.appendChild(line);
+                        });
+                        consoleBox.scrollTop = consoleBox.scrollHeight;
+                    }
+                    
+                    if (pctText) pctText.textContent = `${job.pct}%`;
+                    if (fillBar) fillBar.style.width = `${job.pct}%`;
+                    
+                    if (job.status === 'completed') {
+                        if (badge) {
+                            badge.className = 'job-status-badge badge-completed';
+                            badge.textContent = 'COMPLETED';
+                        }
+                        if (sep) sep.className = 'job-separator completed';
+                        if (statusText) statusText.textContent = 'Üretim Tamamlandı';
+                        
+                        const bannerActions = document.getElementById(`banner-actions-${jobId}`);
+                        if (bannerActions && job.outputs.length > 0) {
+                            const firstUrl = job.outputs[0];
+                            const downloadUrl = `/api/download?url=${encodeURIComponent(firstUrl)}`;
+                            const safePrompt = job.prompt.replace(/'/g, "\\'");
+                            bannerActions.innerHTML = `
+                                <button class="btn-icon-action" onclick="openLightbox('${firstUrl}', '${safePrompt}', '${job.model}', '${job.aspect_ratio}', '${job.tier}', '')" title="Büyüt">👁️</button>
+                                <a href="${downloadUrl}" class="btn-icon-action" title="İndir">💾</a>
+                            `;
+                            bannerActions.style.display = 'flex';
+                        }
+                    } else if (job.status === 'failed') {
+                        if (badge) {
+                            badge.className = 'job-status-badge badge-failed';
+                            badge.textContent = 'FAILED';
+                        }
+                        if (sep) sep.className = 'job-separator failed';
+                        if (statusText) statusText.textContent = 'Başarısız: ' + (job.error || 'Hata oluştu');
+                        if (fillBar) {
+                            fillBar.style.backgroundColor = 'var(--danger)';
+                            fillBar.style.backgroundImage = 'none';
+                        }
+                    } else {
+                        runningCount++;
+                        if (badge) {
+                            badge.className = 'job-status-badge badge-running';
+                            badge.textContent = 'PROCESSING';
+                        }
+                        
+                        if (statusText) {
+                            if (job.status === 'registering') {
+                                statusText.textContent = 'Spamok E-Posta Doğrulaması';
+                            } else if (job.status === 'login') {
+                                statusText.textContent = 'Supabase Girişi';
+                            } else if (job.status === 'uploading') {
+                                statusText.textContent = 'Görsel Yükleniyor';
+                            } else if (job.status === 'generating') {
+                                statusText.textContent = 'Görsel Hesaplanıyor (Processing)';
+                            }
+                        }
+                        
+                        connectToJobStream(jobId, job.prompt, job.model, job.aspect_ratio, job.tier);
+                    }
+                }
+                activeJobs = runningCount;
+                document.getElementById('activeJobsCount').textContent = activeJobs;
+            })
+            .catch(err => console.error("Aktif işler yüklenemedi:", err));
+        }
+
+        // Cancel and remove active or completed job
+        function cancelAndRemoveJob(jobId) {
+            if (activeStreams[jobId]) {
+                activeStreams[jobId].close();
+                delete activeStreams[jobId];
+            }
+            
+            // Notify server to cancel background execution thread & pop from active RAM list
+            fetch(`/api/generate/cancel/${jobId}`, { method: 'POST' })
+            .catch(err => console.error("Cancel API error:", err));
+            
+            const card = document.getElementById(`job-${jobId}`);
+            if (card) {
+                const badge = card.querySelector(`#badge-${jobId}`);
+                if (badge && (badge.classList.contains('badge-running') || badge.innerHTML.includes('Bağlantı Kesildi'))) {
+                    activeJobs = Math.max(0, activeJobs - 1);
+                    document.getElementById('activeJobsCount').textContent = activeJobs;
+                }
+                
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                setTimeout(() => {
+                    card.remove();
+                    if (document.getElementById('jobGrid').children.length === 0) {
+                        document.getElementById('generationsEmpty').style.display = 'flex';
+                        document.getElementById('clearGenerationsBtn').style.display = 'none';
+                    }
+                }, 300);
+            }
+        }
+
+        // Fetch generation history
+        function fetchHistory() {
+            fetch('/api/history')
+            .then(res => res.json())
+            .then(data => {
+                galleryItems = data;
+                renderGallery();
+            })
+            .catch(err => console.error("Geçmiş verisi yüklenemedi:", err));
+        }
+
+        // Render Gallery Items
+        function renderGallery() {
+            const grid = document.getElementById('galleryGrid');
+            const empty = document.getElementById('galleryEmpty');
+            const clearBtn = document.getElementById('clearGalleryBtn');
+            grid.innerHTML = '';
+            
+            document.getElementById('galleryCount').textContent = galleryItems.length;
+            
+            if (galleryItems.length === 0) {
+                empty.style.display = 'flex';
+                clearBtn.style.display = 'none';
+                return;
+            }
+            
+            empty.style.display = 'none';
+            clearBtn.style.display = 'block';
+            
+            galleryItems.forEach(item => {
+                const card = document.createElement('div');
+                card.className = 'gallery-card';
+                card.id = `gallery-${item.id}`;
+                
+                const safePrompt = item.prompt.replace(/'/g, "\\'");
+                const downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}`;
+                const isVideo = item.type === 'video' || (item.url && item.url.includes('.mp4')) || item.model === 'Vibe Video';
+                
+                const mediaHtml = isVideo
+                    ? `<video src="${item.url}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`
+                    : `<img src="${item.url}" alt="Gallery generation" loading="lazy">`;
+                
+                card.innerHTML = `
+                    <div class="gallery-banner">
+                        ${mediaHtml}
+                        <div class="gallery-banner-actions">
+                            <button class="btn-icon-action" onclick="openLightbox('${item.url}', '${safePrompt}', '${item.model}', '${item.aspect_ratio}', '${item.tier}', '${item.id}')" title="Büyüt">👁️</button>
+                            <a href="${downloadUrl}" class="btn-icon-action" title="İndir">💾</a>
+                        </div>
+                        <button class="gallery-close-btn" onclick="deleteGalleryItem('${item.id}')" title="Sil">✕</button>
+                    </div>
+                    <div class="gallery-card-sep"></div>
+                    <div class="gallery-card-body">
+                        <div class="gallery-card-prompt-row">
+                            <div class="gallery-card-prompt" title="${item.prompt}">${item.prompt}</div>
+                            <button class="btn-copy-inline" onclick="copyPromptToClipboard('${safePrompt}')" title="Kopyala">
+                                <svg xmlns="http://www.w3.org/2000/svg" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path></svg>
+                            </button>
+                        </div>
+                        <div class="gallery-card-specs">
+                            <span class="spec-chip">${isVideo ? 'VIDEO' : 'IMAGE'}</span>
+                            <span class="spec-chip">${item.model}</span>
+                            <span class="spec-chip">${item.aspect_ratio}</span>
+                            <span class="spec-chip">${item.tier.toUpperCase()}</span>
+                        </div>
+                    </div>
+                `;
+                grid.appendChild(card);
+            });
+        }
+
+        // Delete single gallery item (no confirm, instant)
+        function deleteGalleryItem(id) {
+            const card = document.getElementById(`gallery-${id}`);
+            if (card) {
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+            }
+            
+            fetch('/api/history/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    setTimeout(() => fetchHistory(), 250);
+                }
+            })
+            .catch(err => console.error(err));
+        }
+
+        // Lightbox Zoom Handler
+        function openLightbox(url, prompt, model, ratio, tier, id) {
+            const lb = document.getElementById('lightbox');
+            const mediaPane = document.getElementById('lightboxMediaPane');
+            const isVideo = url.includes('.mp4') || model === 'Vibe Video';
+            
+            if (isVideo) {
+                mediaPane.innerHTML = `<video id="lightboxVid" src="${url}" controls autoplay style="width: 100%; height: 100%; object-fit: contain; background: black;"></video>`;
+            } else {
+                mediaPane.innerHTML = `<img id="lightboxImg" src="${url}" alt="Zoomed Output" style="width: 100%; height: 100%; object-fit: contain;">`;
+            }
+            
+            document.getElementById('lb-model').textContent = model;
+            document.getElementById('lb-prompt').textContent = `"${prompt}"`;
+            document.getElementById('lb-meta').textContent = `Aspect Ratio: ${ratio} | Tier: ${tier.toUpperCase()}`;
+            
+            // Set date if available
+            const item = galleryItems.find(i => i.id === id);
+            document.getElementById('lb-date').textContent = item ? item.created_at : "Yeni Üretim";
+            
+            // Set proxy download path to trigger actual download
+            const dl = document.getElementById('lb-download');
+            dl.href = `/api/download?url=${encodeURIComponent(url)}`;
+            
+            // Set delete action
+            const delBtn = document.getElementById('lb-delete-btn');
+            if (id) {
+                delBtn.style.display = 'block';
+                delBtn.onclick = () => deleteHistoryItem(id);
+            } else {
+                delBtn.style.display = 'none';
+            }
+            
+            lb.style.display = 'flex';
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+        }
+
+        // Close lightbox when clicking outside the content area
+        function handleLightboxBgClick(e) {
+            // Only close if clicking directly on the lightbox background
+            if (e.target === e.currentTarget) {
+                closeLightbox();
+            }
+        }
+
+        // Individual delete
+        function deleteHistoryItem(id) {
+            if(!confirm("Bu görseli galeriden silmek istediğinize emin misiniz?")) return;
+            
+            fetch('/api/history/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    closeLightbox();
+                    fetchHistory();
+                }
+            })
+            .catch(err => console.error(err));
+        }
+
+        // Clear all history
+        function clearAllHistory() {
+            if(!confirm("Bütün galeri geçmişini kalıcı olarak silmek istediğinizden emin misiniz?")) return;
+            
+            fetch('/api/history/clear-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    fetchHistory();
+                }
+            })
+            .catch(err => console.error(err));
+        }
+
+        // Clear all active and completed generations
+        function clearAllGenerations() {
+            if (!confirm("Bütün aktif ve tamamlanan üretimleri silmek istediğinizden emin misiniz?")) return;
+            
+            // Close all active streams
+            for (const jobId in activeStreams) {
+                if (activeStreams.hasOwnProperty(jobId)) {
+                    activeStreams[jobId].close();
+                    delete activeStreams[jobId];
+                }
+            }
+            
+            const grid = document.getElementById('jobGrid');
+            const cards = Array.from(grid.querySelectorAll('.job-card'));
+            
+            // Start fade out animation immediately
+            cards.forEach(card => {
+                card.style.opacity = '0';
+                card.style.transform = 'scale(0.95)';
+                
+                // Fire cancel request in background
+                const jobId = card.id.replace('job-', '');
+                fetch(`/api/generate/cancel/${jobId}`, { method: 'POST' })
+                    .catch(err => console.error("Cancel API error:", err));
+            });
+            
+            // Finish cleanup after animation
+            setTimeout(() => {
+                grid.innerHTML = '';
+                activeJobs = 0;
+                document.getElementById('activeJobsCount').textContent = activeJobs;
+                document.getElementById('generationsEmpty').style.display = 'flex';
+                document.getElementById('clearGenerationsBtn').style.display = 'none';
+            }, 300);
+        }
+
+        // Clear all prompts
+        function clearAllPrompts() {
+            if (!confirm("Bütün kayıtlı promptları kalıcı olarak silmek istediğinizden emin misiniz?")) return;
+            
+            fetch('/api/prompts/clear-all', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' }
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.success) {
+                    fetchPrompts();
+                }
+            })
+            .catch(err => console.error(err));
+        }
+
+        // DYNAMIC PROMPTS CRUD OPERATIONS
+        function fetchPrompts() {
+            fetch('/api/prompts')
+            .then(res => res.json())
+            .then(data => {
+                userPrompts = data;
+                renderPrompts();
+            })
+            .catch(err => console.error("Promptlar yüklenemedi:", err));
+        }
+
+        function renderPrompts() {
+            const listGrid = document.getElementById('promptsListGrid');
+            const emptyState = document.getElementById('promptsEmpty');
+            const clearBtn = document.getElementById('clearPromptsBtn');
+            listGrid.innerHTML = '';
+            
+            if (userPrompts.length === 0) {
+                emptyState.style.display = 'flex';
+                if (clearBtn) clearBtn.style.display = 'none';
+                return;
+            }
+            
+            emptyState.style.display = 'none';
+            if (clearBtn) clearBtn.style.display = 'block';
+            
+            userPrompts.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'prompt-user-card';
+                
+                const safePrompt = p.prompt.replace(/'/g, "\\'");
+                const safeTag = p.tag.replace(/'/g, "\\'");
+                
+                card.innerHTML = `
+                    <div class="prompt-user-card-header">
+                        <span class="prompt-tag">${p.tag}</span>
+                    </div>
+                    <div class="prompt-user-body">"${p.prompt}"</div>
+                    <div class="prompt-user-actions">
+                        <button class="prompt-action-btn" onclick="usePromptText('${safePrompt}')">Kullan</button>
+                        <button class="prompt-action-btn" onclick="loadPromptForEdit('${p.id}', '${safePrompt}', '${safeTag}')">Düzenle</button>
+                        <button class="prompt-action-btn" onclick="deletePromptItem('${p.id}')" style="color: var(--danger); border-color: rgba(239,68,68,0.2);">Sil</button>
+                    </div>
+                `;
+                listGrid.appendChild(card);
+            });
+        }
+
+        function usePromptText(promptText) {
+            document.getElementById('promptInput').value = promptText;
+            switchTab('generations');
+            // Smooth scroll to control area on mobile
+            if (window.innerWidth <= 1024) {
+                document.querySelector('.sidebar').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function savePrompt() {
+            const promptId = document.getElementById('pmPromptId').value;
+            const tag = document.getElementById('pmPromptTag').value.trim() || 'Genel';
+            const prompt = document.getElementById('pmPromptText').value.trim();
+            
+            if (!prompt) {
+                alert("Lütfen prompt metni yazın!");
+                return;
+            }
+            
+            const isEdit = promptId !== '';
+            const endpoint = isEdit ? '/api/prompts/edit' : '/api/prompts/add';
+            
+            const payload = {
+                prompt: prompt,
+                tag: tag
+            };
+            if(isEdit) payload.id = promptId;
+            
+            fetch(endpoint, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(payload)
+            })
+            .then(res => res.json())
+            .then(data => {
+                if (data.error) {
+                    alert(data.error);
+                    return;
+                }
+                resetPromptForm();
+                fetchPrompts();
+            })
+            .catch(err => console.error(err));
+        }
+
+        function loadPromptForEdit(id, prompt, tag) {
+            document.getElementById('pmPromptId').value = id;
+            document.getElementById('pmPromptTag').value = tag;
+            document.getElementById('pmPromptText').value = prompt;
+            
+            document.getElementById('pmFormTitle').textContent = 'Prompt Düzenle';
+            document.getElementById('pmSaveBtn').textContent = 'Güncelle';
+            document.getElementById('pmCancelBtn').style.display = 'block';
+            
+            // Scroll to form on mobile
+            if (window.innerWidth <= 1024) {
+                document.querySelector('.prompt-editor-sidebar').scrollIntoView({ behavior: 'smooth' });
+            }
+        }
+
+        function resetPromptForm() {
+            document.getElementById('pmPromptId').value = '';
+            document.getElementById('pmPromptTag').value = '';
+            document.getElementById('pmPromptText').value = '';
+            
+            document.getElementById('pmFormTitle').textContent = 'Yeni Prompt Ekle';
+            document.getElementById('pmSaveBtn').textContent = 'Kaydet';
+            document.getElementById('pmCancelBtn').style.display = 'none';
+        }
+
+        function deletePromptItem(id) {
+            if (!confirm("Bu promptu silmek istediğinize emin misiniz?")) return;
+            
+            fetch('/api/prompts/delete', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ id: id })
+            })
+            .then(res => res.json())
+            .then(data => {
+                if(data.success) {
+                    fetchPrompts();
+                }
+            })
+            .catch(err => console.error(err));
+        }
+    </script>
+    {% endif %}
+
+</body>
+</html>
