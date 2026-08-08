@@ -76,7 +76,7 @@ except ImportError:
             "model_id": "qwen-image-3",
             "tiers": ["standard", "pro"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
-            #"resolution": "HD"
+            "resolution": "1K"
         },
         "Wan 2.6": {
             "model_id": "wan-2.6-image",
