@@ -73,7 +73,7 @@ except ImportError:
             "resolution": "1K"
         },
         "Qwen Image 2": {
-            "model_id": "qwen-image-2",
+            "model_id": "qwen-image-3",
             "tiers": ["standard", "pro"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
             "resolution": "HD"
