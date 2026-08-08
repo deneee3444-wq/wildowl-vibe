@@ -72,11 +72,11 @@ except ImportError:
             "aspect_ratios": ["1:1", "3:2", "2:3"],
             "resolution": "1K"
         },
-        "Qwen Image 2": {
+        "Qwen Image 3": {
             "model_id": "qwen-image-3",
             "tiers": ["standard", "pro"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
-            "resolution": "HD"
+            #"resolution": "HD"
         },
         "Wan 2.6": {
             "model_id": "wan-2.6-image",
