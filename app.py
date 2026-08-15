@@ -81,7 +81,7 @@ except ImportError:
         "Qwen Image 3": {
             "model_id": "qwen-image-3",
             "tiers": ["standard"],
-            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"],
             "resolution": "1K"
         },
         "Wan 2.6": {
