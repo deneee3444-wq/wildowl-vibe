@@ -1783,9 +1783,47 @@
                 </div>
                 
                 <div class="lightbox-actions">
+                    <!-- extend button for pop vid videos -->
+                    <button class="btn-lightbox-action" id="lb-extend-btn" style="display: none; background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%); color: white; box-shadow: 0 4px 15px rgba(6, 182, 212, 0.3);">⏩ Videoyu Uzat (Extend)</button>
                     <!-- proxy force download endpoint -->
                     <a href="" class="btn-lightbox-action btn-lightbox-download" id="lb-download">Görseli İndir</a>
                     <button class="btn-lightbox-action btn-lightbox-delete" id="lb-delete-btn">Stüdyodan Sil</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- POPVID EXTEND MODAL -->
+    <div class="lightbox" id="extendModal" onclick="handleExtendModalBgClick(event)">
+        <button class="lightbox-close" onclick="closeExtendModal()">✕</button>
+        <div class="lightbox-content" style="max-width: 580px; flex-direction: column;" onclick="event.stopPropagation()">
+            <div style="padding: 24px; display: flex; flex-direction: column; gap: 16px;">
+                <div style="display: flex; align-items: center; justify-content: space-between;">
+                    <div class="lightbox-title" style="font-size: 1.2rem; display: flex; align-items: center; gap: 8px;">
+                        <span>⏩ Pop Vid - Videoyu Uzat (Extend)</span>
+                    </div>
+                </div>
+                <div style="font-size: 0.85rem; color: var(--text-muted); line-height: 1.4;">
+                    Seçili videonun devamında neler olmasını istediğinizi yazın. Karakter otomatik olarak <strong>Human</strong> modunda devam ettirilecektir.
+                </div>
+                <div id="extendVideoPreviewPane" style="width: 100%; height: 180px; background: #000; border-radius: 8px; overflow: hidden; display: flex; align-items: center; justify-content: center; border: 1px solid var(--panel-border);">
+                    <!-- Video element injected here -->
+                </div>
+                <div class="input-group">
+                    <label class="input-label">Uzatma Komutu (Extend Prompt)</label>
+                    <textarea class="prompt-textarea" id="extendPromptInput" style="min-height: 80px;" placeholder="Karakter yürümeye devam eder, etrafına bakar ve gülümser..."></textarea>
+                </div>
+                <input type="hidden" id="extendMemeId" value="">
+                <input type="hidden" id="extendUserId" value="">
+                <input type="hidden" id="extendIdToken" value="">
+                <input type="hidden" id="extendVideoUrl" value="">
+                <div style="display: flex; gap: 10px; margin-top: 5px;">
+                    <button class="btn-submit" id="btnStartExtend" onclick="triggerPopVidExtend()" style="flex: 2; margin-top: 0; background: linear-gradient(135deg, #06b6d4 0%, #0891b2 100%);">
+                        <span>Uzatmayı Başlat</span>
+                    </button>
+                    <button class="btn-submit" onclick="closeExtendModal()" style="flex: 1; margin-top: 0; background: rgba(255,255,255,0.05); border: 1px solid var(--panel-border);">
+                        <span>İptal</span>
+                    </button>
                 </div>
             </div>
         </div>
@@ -2143,7 +2181,7 @@
         }
 
         // Create Active Job Card (Grid-Layout based, matching reference design)
-        function createJobCard(jobId, prompt, model, ratio, tier, count, refImgUrl) {
+        function createJobCard(jobId, prompt, model, ratio, tier, count, refImgUrl, memeId, userId, idToken) {
             document.getElementById('generationsEmpty').style.display = 'none';
             document.getElementById('clearGenerationsBtn').style.display = 'block';
             const grid = document.getElementById('jobGrid');
@@ -2151,11 +2189,14 @@
             const card = document.createElement('div');
             card.className = 'job-card';
             card.id = `job-${jobId}`;
+            if (memeId) card.setAttribute('data-meme-id', memeId);
+            if (userId) card.setAttribute('data-user-id', userId);
+            if (idToken) card.setAttribute('data-id-token', idToken);
             
             // Escape single quotes for inline JS safety
             const safePrompt = prompt.replace(/'/g, "\\'");
             
-            const isVidModel = model === 'Vibe Video' || (modelsConfig[model] && modelsConfig[model].type === 'video');
+            const isVidModel = model === 'Vibe Video' || model === 'Pop Vid' || (modelsConfig[model] && modelsConfig[model].type === 'video');
             
             let bannerHtml = '';
             if (refImgUrl) {
@@ -2226,7 +2267,7 @@
         }
 
         // Connect SSE progress reader to background job stream
-        function connectToJobStream(jobId, prompt, model, ratio, tier) {
+        function connectToJobStream(jobId, prompt, model, ratio, tier, memeId, userId, idToken) {
             const source = new EventSource(`/api/generate/stream/${jobId}`);
             activeStreams[jobId] = source;
             const consoleBox = document.getElementById(`console-${jobId}`);
@@ -2269,12 +2310,12 @@
                             badge.textContent = 'PROCESSING';
                             statusText.textContent = 'Spamok E-Posta Doğrulaması';
                         } else if (data.status === 'login') {
-                            statusText.textContent = 'Supabase Girişi';
+                            statusText.textContent = 'PopVid / Supabase Girişi';
                         } else if (data.status === 'uploading') {
                             statusText.textContent = 'Görsel Yükleniyor';
                         } else if (data.status === 'generating') {
                             badge.textContent = 'PROCESSING';
-                            statusText.textContent = 'Görsel Hesaplanıyor (Processing)';
+                            statusText.textContent = 'Video Hesaplanıyor (Processing)';
                         }
                     }
                 } 
@@ -2305,7 +2346,7 @@
                     if (data.outputs.length > 0) {
                         const bannerImg = document.getElementById(`banner-img-${jobId}`);
                         const outputUrl = data.outputs[0];
-                        const isVideo = outputUrl.includes('.mp4') || model === 'Vibe Video';
+                        const isVideo = outputUrl.includes('.mp4') || model === 'Vibe Video' || model === 'Pop Vid';
                         
                         if (bannerImg) {
                             if (isVideo) {
@@ -2337,8 +2378,19 @@
                         if (bannerActions) {
                             const firstUrl = data.outputs[0];
                             const downloadUrl = `/api/download?url=${encodeURIComponent(firstUrl)}`;
+                            const cardElem = document.getElementById(`job-${jobId}`);
+                            const curMemeId = data.meme_id || (cardElem ? cardElem.getAttribute('data-meme-id') : '') || memeId || '';
+                            const curUserId = data.user_id || (cardElem ? cardElem.getAttribute('data-user-id') : '') || userId || '';
+                            const curIdToken = data.id_token || (cardElem ? cardElem.getAttribute('data-id-token') : '') || idToken || '';
+                            
+                            let extendBtnHtml = '';
+                            if (model === 'Pop Vid' || curMemeId) {
+                                extendBtnHtml = `<button class="btn-icon-action" onclick="openExtendModal('${firstUrl}', '${safePrompt}', '${curMemeId}', '${curUserId}', '${curIdToken}')" title="Videoyu Uzat (Extend)">⏩</button>`;
+                            }
+                            
                             bannerActions.innerHTML = `
-                                <button class="btn-icon-action" onclick="openLightbox('${firstUrl}', '${safePrompt}', '${model}', '${ratio}', '${tier}', '')" title="Büyüt">👁️</button>
+                                ${extendBtnHtml}
+                                <button class="btn-icon-action" onclick="openLightbox('${firstUrl}', '${safePrompt}', '${model}', '${ratio}', '${tier}', '', '${curMemeId}', '${curUserId}', '${curIdToken}')" title="Büyüt">👁️</button>
                                 <a href="${downloadUrl}" class="btn-icon-action" title="İndir">💾</a>
                             `;
                             bannerActions.style.display = 'flex';
@@ -2409,7 +2461,7 @@
                     document.getElementById('generationsEmpty').style.display = 'flex';
                 }
                 for (const [jobId, job] of Object.entries(jobs)) {
-                    createJobCard(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.num_images, job.outputs.length > 0 ? job.outputs[0] : null);
+                    createJobCard(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.num_images, job.outputs.length > 0 ? job.outputs[0] : null, job.meme_id, job.user_id, job.id_token);
                     
                     const consoleBox = document.getElementById(`console-${jobId}`);
                     const badge = document.getElementById(`badge-${jobId}`);
@@ -2447,8 +2499,15 @@
                             const firstUrl = job.outputs[0];
                             const downloadUrl = `/api/download?url=${encodeURIComponent(firstUrl)}`;
                             const safePrompt = job.prompt.replace(/'/g, "\\'");
+                            
+                            let extendBtnHtml = '';
+                            if (job.model === 'Pop Vid' || job.meme_id) {
+                                extendBtnHtml = `<button class="btn-icon-action" onclick="openExtendModal('${firstUrl}', '${safePrompt}', '${job.meme_id || ''}', '${job.user_id || ''}', '${job.id_token || ''}')" title="Videoyu Uzat (Extend)">⏩</button>`;
+                            }
+                            
                             bannerActions.innerHTML = `
-                                <button class="btn-icon-action" onclick="openLightbox('${firstUrl}', '${safePrompt}', '${job.model}', '${job.aspect_ratio}', '${job.tier}', '')" title="Büyüt">👁️</button>
+                                ${extendBtnHtml}
+                                <button class="btn-icon-action" onclick="openLightbox('${firstUrl}', '${safePrompt}', '${job.model}', '${job.aspect_ratio}', '${job.tier}', '', '${job.meme_id || ''}', '${job.user_id || ''}', '${job.id_token || ''}')" title="Büyüt">👁️</button>
                                 <a href="${downloadUrl}" class="btn-icon-action" title="İndir">💾</a>
                             `;
                             bannerActions.style.display = 'flex';
@@ -2475,15 +2534,15 @@
                             if (job.status === 'registering') {
                                 statusText.textContent = 'Spamok E-Posta Doğrulaması';
                             } else if (job.status === 'login') {
-                                statusText.textContent = 'Supabase Girişi';
+                                statusText.textContent = 'PopVid / Supabase Girişi';
                             } else if (job.status === 'uploading') {
                                 statusText.textContent = 'Görsel Yükleniyor';
                             } else if (job.status === 'generating') {
-                                statusText.textContent = 'Görsel Hesaplanıyor (Processing)';
+                                statusText.textContent = 'Video Hesaplanıyor (Processing)';
                             }
                         }
                         
-                        connectToJobStream(jobId, job.prompt, job.model, job.aspect_ratio, job.tier);
+                        connectToJobStream(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.meme_id, job.user_id, job.id_token);
                     }
                 }
                 activeJobs = runningCount;
@@ -2559,17 +2618,23 @@
                 
                 const safePrompt = item.prompt.replace(/'/g, "\\'");
                 const downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}`;
-                const isVideo = item.type === 'video' || (item.url && item.url.includes('.mp4')) || item.model === 'Vibe Video';
+                const isVideo = item.type === 'video' || (item.url && item.url.includes('.mp4')) || item.model === 'Vibe Video' || item.model === 'Pop Vid';
                 
                 const mediaHtml = isVideo
                     ? `<video src="${item.url}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`
                     : `<img src="${item.url}" alt="Gallery generation" loading="lazy">`;
                 
+                let extendBtnHtml = '';
+                if (item.model === 'Pop Vid' || item.meme_id) {
+                    extendBtnHtml = `<button class="btn-icon-action" onclick="openExtendModal('${item.url}', '${safePrompt}', '${item.meme_id || ''}', '${item.user_id || ''}', '${item.id_token || ''}')" title="Videoyu Uzat (Extend)">⏩</button>`;
+                }
+                
                 card.innerHTML = `
                     <div class="gallery-banner">
                         ${mediaHtml}
                         <div class="gallery-banner-actions">
-                            <button class="btn-icon-action" onclick="openLightbox('${item.url}', '${safePrompt}', '${item.model}', '${item.aspect_ratio}', '${item.tier}', '${item.id}')" title="Büyüt">👁️</button>
+                            ${extendBtnHtml}
+                            <button class="btn-icon-action" onclick="openLightbox('${item.url}', '${safePrompt}', '${item.model}', '${item.aspect_ratio}', '${item.tier}', '${item.id}', '${item.meme_id || ''}', '${item.user_id || ''}', '${item.id_token || ''}')" title="Büyüt">👁️</button>
                             <a href="${downloadUrl}" class="btn-icon-action" title="İndir">💾</a>
                         </div>
                         <button class="gallery-close-btn" onclick="deleteGalleryItem('${item.id}')" title="Sil">✕</button>
@@ -2617,13 +2682,13 @@
         }
 
         // Lightbox Zoom Handler
-        function openLightbox(url, prompt, model, ratio, tier, id) {
+        function openLightbox(url, prompt, model, ratio, tier, id, memeId, userId, idToken) {
             const lb = document.getElementById('lightbox');
             const mediaPane = document.getElementById('lightboxMediaPane');
-            const isVideo = url.includes('.mp4') || model === 'Vibe Video';
+            const isVideo = url.includes('.mp4') || model === 'Vibe Video' || model === 'Pop Vid';
             
             if (isVideo) {
-                mediaPane.innerHTML = `<video id="lightboxVid" src="${url}" controls autoplay style="width: 100%; height: 100%; object-fit: contain; background: black;"></video>`;
+                mediaPane.innerHTML = `<video id="lightboxVid" src="${url}" controls autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: contain; background: black;"></video>`;
             } else {
                 mediaPane.innerHTML = `<img id="lightboxImg" src="${url}" alt="Zoomed Output" style="width: 100%; height: 100%; object-fit: contain;">`;
             }
@@ -2640,6 +2705,22 @@
             const dl = document.getElementById('lb-download');
             dl.href = `/api/download?url=${encodeURIComponent(url)}`;
             
+            // Set extend button action
+            const extendBtn = document.getElementById('lb-extend-btn');
+            const effectiveMemeId = memeId || (item ? item.meme_id : '');
+            const effectiveUserId = userId || (item ? item.user_id : '');
+            const effectiveIdToken = idToken || (item ? item.id_token : '');
+            
+            if (model === 'Pop Vid' || effectiveMemeId) {
+                extendBtn.style.display = 'flex';
+                extendBtn.onclick = () => {
+                    closeLightbox();
+                    openExtendModal(url, prompt, effectiveMemeId, effectiveUserId, effectiveIdToken);
+                };
+            } else {
+                extendBtn.style.display = 'none';
+            }
+            
             // Set delete action
             const delBtn = document.getElementById('lb-delete-btn');
             if (id) {
@@ -2650,6 +2731,122 @@
             }
             
             lb.style.display = 'flex';
+        }
+
+        function closeLightbox() {
+            document.getElementById('lightbox').style.display = 'none';
+        }
+
+        // Close lightbox when clicking outside the content area
+        function handleLightboxBgClick(e) {
+            // Only close if clicking directly on the lightbox background
+            if (e.target === e.currentTarget) {
+                closeLightbox();
+            }
+        }
+
+        // POP VID EXTEND MODAL LOGIC
+        function openExtendModal(videoUrl, currentPrompt, memeId, userId, idToken) {
+            const modal = document.getElementById('extendModal');
+            const previewPane = document.getElementById('extendVideoPreviewPane');
+            previewPane.innerHTML = `<video src="${videoUrl}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: contain;"></video>`;
+            
+            let resolvedMemeId = memeId || '';
+            let resolvedUserId = userId || '';
+            let resolvedIdToken = idToken || '';
+            
+            if (!resolvedMemeId && galleryItems && galleryItems.length > 0) {
+                const found = galleryItems.find(i => (i.url === videoUrl || i.id === videoUrl) && i.meme_id);
+                if (found) {
+                    resolvedMemeId = found.meme_id;
+                    resolvedUserId = resolvedUserId || found.user_id || '';
+                    resolvedIdToken = resolvedIdToken || found.id_token || '';
+                }
+            }
+            
+            document.getElementById('extendMemeId').value = resolvedMemeId;
+            document.getElementById('extendUserId').value = resolvedUserId;
+            document.getElementById('extendIdToken').value = resolvedIdToken;
+            document.getElementById('extendVideoUrl').value = videoUrl || '';
+            
+            document.getElementById('extendPromptInput').value = '';
+            document.getElementById('extendPromptInput').focus();
+            
+            modal.style.display = 'flex';
+        }
+
+        function closeExtendModal() {
+            document.getElementById('extendModal').style.display = 'none';
+        }
+
+        function handleExtendModalBgClick(e) {
+            if (e.target === e.currentTarget) {
+                closeExtendModal();
+            }
+        }
+
+        function triggerPopVidExtend() {
+            const prompt = document.getElementById('extendPromptInput').value.trim();
+            let memeId = document.getElementById('extendMemeId').value.trim();
+            const userId = document.getElementById('extendUserId').value.trim();
+            const idToken = document.getElementById('extendIdToken').value.trim();
+            const videoUrl = document.getElementById('extendVideoUrl').value.trim();
+            
+            if (!prompt) {
+                alert("Lütfen videonun devamında neler olacağını anlatan bir prompt yazın!");
+                return;
+            }
+            
+            if (!memeId && galleryItems && galleryItems.length > 0) {
+                const found = galleryItems.find(i => (i.url === videoUrl || i.id === videoUrl) && i.meme_id);
+                if (found) {
+                    memeId = found.meme_id;
+                }
+            }
+            
+            const btn = document.getElementById('btnStartExtend');
+            btn.disabled = true;
+            btn.style.opacity = '0.7';
+            btn.textContent = 'Başlatılıyor...';
+            
+            fetch('/api/popvid/extend', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    meme_id: memeId,
+                    video_url: videoUrl,
+                    prompt: prompt,
+                    user_id: userId,
+                    id_token: idToken
+                })
+            })
+            .then(res => res.json())
+            .then(data => {
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.textContent = 'Uzatmayı Başlat';
+                
+                if (data.error) {
+                    alert("Uzatma Hatası: " + data.error);
+                    return;
+                }
+                
+                closeExtendModal();
+                switchTab('generations');
+                
+                createJobCard(data.job_id, prompt, 'Pop Vid', '16:9', 'standard', 1, videoUrl, memeId, userId, idToken);
+                
+                activeJobs++;
+                document.getElementById('activeJobsCount').textContent = activeJobs;
+                connectToJobStream(data.job_id, prompt, 'Pop Vid', '16:9', 'standard', memeId, userId, idToken);
+            })
+            .catch(err => {
+                console.error(err);
+                alert("Sunucuya bağlanırken hata oluştu.");
+                btn.disabled = false;
+                btn.style.opacity = '1';
+                btn.textContent = 'Uzatmayı Başlat';
+            });
         }
 
         function closeLightbox() {
