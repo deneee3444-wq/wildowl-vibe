@@ -22,6 +22,11 @@ try:
 except ImportError:
     vibeVideo = None
 
+try:
+    import popVidAI
+except ImportError:
+    popVidAI = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -31,6 +36,13 @@ except ImportError:
     MODELS_CONFIG = {
         "Vibe Video": {
             "model_id": "vibe-video",
+            "type": "video",
+            "tiers": ["standard"],
+            "aspect_ratios": ["16:9", "9:16", "1:1"],
+            "resolution": "720p"
+        },
+        "Pop Vid": {
+            "model_id": "pop-vid",
             "type": "video",
             "tiers": ["standard"],
             "aspect_ratios": ["16:9", "9:16", "1:1"],
@@ -151,6 +163,9 @@ except ImportError:
 
 app = Flask(__name__)
 app.secret_key = "wild_owl_ai_studio_super_secret_key"
+app.config['JSON_SORT_KEYS'] = False
+if hasattr(app, 'json'):
+    app.json.sort_keys = False
 
 # In-memory stores (RAM)
 GENERATION_HISTORY = []
@@ -365,6 +380,76 @@ def start_generation():
     
     return jsonify({'job_id': job_id})
 
+# POP VID EXTEND JOB
+@app.route('/api/popvid/extend', methods=['POST'])
+def start_popvid_extend():
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    data = request.get_json() or {}
+    meme_id = data.get('meme_id', '').strip()
+    prompt = data.get('prompt', '').strip()
+    video_url = data.get('video_url', '').strip()
+    user_id = data.get('user_id')
+    id_token = data.get('id_token')
+    
+    # Otomatik meme_id kurtarma / fallback
+    if not meme_id:
+        if video_url:
+            for item in GENERATION_HISTORY:
+                if item.get('url') == video_url and item.get('meme_id'):
+                    meme_id = item.get('meme_id')
+                    user_id = user_id or item.get('user_id')
+                    id_token = id_token or item.get('id_token')
+                    break
+        if not meme_id:
+            for item in GENERATION_HISTORY:
+                if item.get('model') == 'Pop Vid' and item.get('meme_id'):
+                    meme_id = item.get('meme_id')
+                    user_id = user_id or item.get('user_id')
+                    id_token = id_token or item.get('id_token')
+                    break
+        if not meme_id and popVidAI and hasattr(popVidAI, 'get_last_meme_id'):
+            meme_id = popVidAI.get_last_meme_id()
+            
+    if not meme_id:
+        return jsonify({'error': 'Uzatılacak video referans bilgisi (Meme ID) bulunamadı!'}), 400
+    if not prompt:
+        return jsonify({'error': 'Uzatma promptu boş olamaz!'}), 400
+        
+    now = time.time()
+    for jid in list(ACTIVE_JOBS.keys()):
+        if now - ACTIVE_JOBS[jid]['created_at'] > 3600:
+            ACTIVE_JOBS.pop(jid, None)
+            
+    job_id = uuid.uuid4().hex
+    ACTIVE_JOBS[job_id] = {
+        'prompt': prompt,
+        'model': 'Pop Vid',
+        'aspect_ratio': '16:9',
+        'tier': 'standard',
+        'resolution': '720p',
+        'num_images': 1,
+        'images': [],
+        'is_extend': True,
+        'meme_id': meme_id,
+        'extend_meme_id': meme_id,
+        'extend_user_id': user_id,
+        'extend_id_token': id_token,
+        'created_at': time.time(),
+        'status': 'registering',
+        'pct': 0,
+        'logs': [],
+        'outputs': [],
+        'error': None
+    }
+    
+    t = threading.Thread(target=run_job_in_background, args=(job_id,))
+    t.daemon = True
+    t.start()
+    
+    return jsonify({'job_id': job_id})
+
 def run_job_in_background(job_id):
     job = ACTIVE_JOBS.get(job_id)
     if not job:
@@ -462,6 +547,128 @@ def run_job_in_background(job_id):
                     ACTIVE_JOBS[job_id]['error'] = str(vibe_err)
             finally:
                 if temp_img_path and "vibe_input_" in temp_img_path and os.path.exists(temp_img_path):
+                    try:
+                        os.remove(temp_img_path)
+                    except Exception:
+                        pass
+            return
+
+        # POP VID HANDLER
+        if model_name == "Pop Vid":
+            if not popVidAI:
+                add_log("Pop Vid modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'Pop Vid modülü bulunamadı.'
+                return
+
+            # Extend (Uzatma) isteği mi?
+            if job.get('is_extend'):
+                add_log("Pop Vid video uzatma işlemi hazırlanıyor...", "registering", 5)
+                try:
+                    res = popVidAI.run_extend(
+                        meme_id=job.get('extend_meme_id'),
+                        prompt=prompt,
+                        character_type="human",
+                        user_id=job.get('extend_user_id'),
+                        id_token=job.get('extend_id_token'),
+                        log_callback=add_log
+                    )
+                    output_url = res.get("output")
+                    if output_url:
+                        item = {
+                            'id': uuid.uuid4().hex,
+                            'url': output_url,
+                            'prompt': prompt,
+                            'model': model_name,
+                            'aspect_ratio': aspect_ratio or "16:9",
+                            'tier': tier or "standard",
+                            'type': "video",
+                            'meme_id': res.get('meme_id'),
+                            'user_id': res.get('user_id'),
+                            'id_token': res.get('id_token'),
+                            'is_extend': True,
+                            'source_meme_id': job.get('extend_meme_id'),
+                            'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                        }
+                        GENERATION_HISTORY.insert(0, item)
+                        if job_id in ACTIVE_JOBS:
+                            ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                            ACTIVE_JOBS[job_id]['meme_id'] = res.get('meme_id')
+                            ACTIVE_JOBS[job_id]['user_id'] = res.get('user_id')
+                            ACTIVE_JOBS[job_id]['id_token'] = res.get('id_token')
+                            ACTIVE_JOBS[job_id]['status'] = 'completed'
+                    else:
+                        raise RuntimeError("Pop Vid video uzatma URL üretmedi.")
+                except Exception as pop_err:
+                    add_log(f"Pop Vid Uzatma Hatası: {str(pop_err)}", "error", 90)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['status'] = 'failed'
+                        ACTIVE_JOBS[job_id]['error'] = str(pop_err)
+                return
+
+            # Sıfırdan Pop Vid üretimi
+            add_log("Pop Vid motoru hazırlanıyor...", "registering", 5)
+            temp_img_path = None
+            if images and len(images) > 0:
+                img_data = images[0]
+                ext = ".jpg"
+                if "png" in img_data.get("content_type", "").lower():
+                    ext = ".png"
+                temp_dir = os.path.join(ROOT_DIR, "scratch")
+                os.makedirs(temp_dir, exist_ok=True)
+                temp_img_path = os.path.join(temp_dir, f"popvid_input_{job_id}{ext}")
+                with open(temp_img_path, "wb") as f:
+                    f.write(img_data['content'])
+            else:
+                test_jpg = os.path.join(ROOT_DIR, "test.jpg")
+                if os.path.exists(test_jpg):
+                    temp_img_path = test_jpg
+                else:
+                    temp_dir = os.path.join(ROOT_DIR, "scratch")
+                    os.makedirs(temp_dir, exist_ok=True)
+                    temp_img_path = os.path.join(temp_dir, f"fallback_{job_id}.jpg")
+                    with open(temp_img_path, "wb") as f:
+                        f.write(b'\xff\xd8\xff\xe0\x00\x10JFIF\x00\x01\x01\x01\x00`\x00`\x00\x00\xff\xdb\x00C\x00\x08\x06\x06\x07\x06\x05\x08\x07\x07\x07\t\t\x08\n\x0c\x14\r\x0c\x0b\x0b\x0c\x19\x12\x13\x0f\x14\x1d\x1a\x1f\x1e\x1d\x1a\x1c\x1c $.\' ",#\x1c\x1c(7),01444\x1f\'9=82<.342\xff\xc0\x00\x0b\x08\x00\x01\x00\x01\x01\x01\x11\x00\xff\xc4\x00\x1f\x00\x00\x01\x05\x01\x01\x01\x01\x01\x01\x00\x00\x00\x00\x00\x00\x00\x00\x01\x02\x03\x04\x05\x06\x07\x08\t\n\x0b\xff\xda\x00\x08\x01\x01\x00\x00?\x00\xbf\x00\xff\xd9')
+
+            try:
+                res = popVidAI.run_once(
+                    image_path=temp_img_path,
+                    prompt=prompt,
+                    character_type="human",
+                    log_callback=add_log
+                )
+                output_url = res.get("output")
+                if output_url:
+                    item = {
+                        'id': uuid.uuid4().hex,
+                        'url': output_url,
+                        'prompt': prompt,
+                        'model': model_name,
+                        'aspect_ratio': aspect_ratio or "16:9",
+                        'tier': tier or "standard",
+                        'type': "video",
+                        'meme_id': res.get('meme_id'),
+                        'user_id': res.get('user_id'),
+                        'id_token': res.get('id_token'),
+                        'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                    }
+                    GENERATION_HISTORY.insert(0, item)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                        ACTIVE_JOBS[job_id]['meme_id'] = res.get('meme_id')
+                        ACTIVE_JOBS[job_id]['user_id'] = res.get('user_id')
+                        ACTIVE_JOBS[job_id]['id_token'] = res.get('id_token')
+                        ACTIVE_JOBS[job_id]['status'] = 'completed'
+                else:
+                    raise RuntimeError("Pop Vid video üretimi URL üretmedi.")
+            except Exception as pop_err:
+                add_log(f"Pop Vid Hatası: {str(pop_err)}", "error", 90)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = str(pop_err)
+            finally:
+                if temp_img_path and "popvid_input_" in temp_img_path and os.path.exists(temp_img_path):
                     try:
                         os.remove(temp_img_path)
                     except Exception:
@@ -729,7 +936,7 @@ def stream_job(job_id):
                 last_sent_idx += 1
                 
             if current_job['status'] == 'completed':
-                yield f"data: {json.dumps({'type': 'completed', 'outputs': current_job['outputs']})}\n\n"
+                yield f"data: {json.dumps({'type': 'completed', 'outputs': current_job['outputs'], 'meme_id': current_job.get('meme_id'), 'user_id': current_job.get('user_id'), 'id_token': current_job.get('id_token')})}\n\n"
                 break
             elif current_job['status'] == 'failed':
                 yield f"data: {json.dumps({'type': 'failed', 'error': current_job['error']})}\n\n"
@@ -766,6 +973,10 @@ def get_active_jobs():
             'pct': job['pct'],
             'logs': job['logs'],
             'outputs': job.get('outputs', []),
+            'meme_id': job.get('meme_id'),
+            'user_id': job.get('user_id'),
+            'id_token': job.get('id_token'),
+            'is_extend': job.get('is_extend', False),
             'error': job.get('error')
         }
     return jsonify(active_list)
