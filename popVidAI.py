@@ -189,7 +189,7 @@ class PopVidClient:
             "highRes": "true",
             "silentSoundtrack": "false",
             "noLogo": "false",
-            "proAnimation": "false",
+            "proAnimation": "true",
             "character_type": character_type,
             "characterType": character_type,
             "enableInteractive": "true",
