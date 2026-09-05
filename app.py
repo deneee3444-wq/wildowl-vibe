@@ -27,6 +27,11 @@ try:
 except ImportError:
     popVidAI = None
 
+try:
+    import topVidAI
+except ImportError:
+    topVidAI = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -97,10 +102,13 @@ except ImportError:
             "resolution": "1K"
         },
         "Wan 2.6": {
-            "model_id": "wan-2.6-image",
-            "tiers": ["standard"],
-            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
-            "resolution": "1K"
+            "model_id": "wan-2.6-video",
+            "type": "video",
+            "tiers": ["5", "10", "15"],
+            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye", "15": "15 Saniye"},
+            "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+            "resolutions": ["720p", "1080p"],
+            "resolution": "720p"
         },
         "Z-Image Turbo": {
             "model_id": "z-image-turbo",
@@ -669,6 +677,77 @@ def run_job_in_background(job_id):
                     ACTIVE_JOBS[job_id]['error'] = str(pop_err)
             finally:
                 if temp_img_path and "popvid_input_" in temp_img_path and os.path.exists(temp_img_path):
+                    try:
+                        os.remove(temp_img_path)
+                    except Exception:
+                        pass
+            return
+
+        # TOPVID WAN 2.6 HANDLER
+        if model_name == "Wan 2.6":
+            if not topVidAI:
+                add_log("TopVid Wan 2.6 modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'TopVid Wan 2.6 modülü bulunamadı.'
+                return
+
+            add_log("TopVid Wan 2.6 motoru hazırlanıyor...", "registering", 5)
+            temp_img_path = None
+            if images and len(images) > 0:
+                img_data = images[0]
+                ext = ".jpg"
+                if "png" in img_data.get("content_type", "").lower():
+                    ext = ".png"
+                temp_dir = os.path.join(ROOT_DIR, "scratch")
+                os.makedirs(temp_dir, exist_ok=True)
+                temp_img_path = os.path.join(temp_dir, f"topvid_input_{job_id}{ext}")
+                with open(temp_img_path, "wb") as f:
+                    f.write(img_data['content'])
+
+            try:
+                # tier maps to duration ("5", "10", "15")
+                duration = tier if tier in ["5", "10", "15"] else "5"
+                # resolution ("720p", "1080p")
+                res_choice = resolution if resolution in ["720p", "1080p"] else "720p"
+                # aspect_ratio ("16:9", "9:16", "1:1", "4:3", "3:4")
+                ar_choice = aspect_ratio or "16:9"
+
+                res = topVidAI.run_once(
+                    prompt=prompt,
+                    image_path=temp_img_path,
+                    aspect_ratio=ar_choice,
+                    duration=duration,
+                    resolution=res_choice,
+                    log_callback=add_log
+                )
+                output_url = res.get("output")
+                if output_url:
+                    item = {
+                        'id': uuid.uuid4().hex,
+                        'url': output_url,
+                        'prompt': prompt,
+                        'model': model_name,
+                        'aspect_ratio': ar_choice,
+                        'tier': duration,
+                        'resolution': res_choice,
+                        'type': "video",
+                        'task_id': res.get('task_id'),
+                        'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                    }
+                    GENERATION_HISTORY.insert(0, item)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                        ACTIVE_JOBS[job_id]['status'] = 'completed'
+                else:
+                    raise RuntimeError("Wan 2.6 video üretimi URL üretmedi.")
+            except Exception as tv_err:
+                add_log(f"Wan 2.6 Hatası: {str(tv_err)}", "error", 90)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = str(tv_err)
+            finally:
+                if temp_img_path and "topvid_input_" in temp_img_path and os.path.exists(temp_img_path):
                     try:
                         os.remove(temp_img_path)
                     except Exception:
