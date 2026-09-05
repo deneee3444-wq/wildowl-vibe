@@ -358,96 +358,44 @@ def create_boosted_account(num_refs: int = None, target_points: int = 160) -> Tu
 
 
 # ==============================================================================
-# 5. ARKA PLAN 5 HESAP HAVUZU (ACCOUNT POOL)
+# 5. İHTİYAÇ ANINDA ÇALIŞAN HESAP YÖNETİCİSİ (ON-DEMAND POOL)
 # ==============================================================================
-ACCOUNT_POOL: List[Dict[str, Any]] = []
-POOL_LOCK = threading.Lock()
-CURRENT_ACCOUNT_INDEX = 0
-POOL_TARGET_SIZE = 5
-_WORKER_STARTED = False
-
-
-def _bg_account_worker():
-    """Arka planda sessizce 5 adet takviyeli hesap hazırlar."""
-    while True:
-        with POOL_LOCK:
-            curr_len = len(ACCOUNT_POOL)
-        if curr_len >= POOL_TARGET_SIZE:
-            time.sleep(30)
-            continue
-
-        try:
-            print(f"[TopVidPool] Arka planda hesap hazırlanıyor ({curr_len + 1}/{POOL_TARGET_SIZE})...")
-            # 1 ref ekleyerek 160 puana ulaştırıyoruz (Wan 2.6 tam 1 görev maliyeti)
-            client, pts = create_boosted_account(num_refs=1)
-            with POOL_LOCK:
-                ACCOUNT_POOL.append({
-                    "client": client,
-                    "token": client.token,
-                    "points": pts,
-                    "created_at": time.time()
-                })
-            print(f"[TopVidPool] Hesap havuza eklendi! Toplam Havuz: {len(ACCOUNT_POOL)}/{POOL_TARGET_SIZE} | Bakiye: {pts} Puan")
-        except Exception as e:
-            print(f"[TopVidPool] Arka plan hesap açma uyarısı: {e}")
-            time.sleep(5)
-        time.sleep(1)
-
-
-def init_account_pool():
-    global _WORKER_STARTED
-    if not _WORKER_STARTED:
-        _WORKER_STARTED = True
-        t = threading.Thread(target=_bg_account_worker, daemon=True)
-        t.start()
-
-
-# Modül import edilir edilmez havuz işçisini başlat
-init_account_pool()
+GLOBAL_TOPVID_CLIENT: Optional[TopVidClient] = None
+GLOBAL_TOPVID_POINTS: int = 0
+CLIENT_LOCK = threading.Lock()
 
 
 def get_account_for_task(needed_points: int = 160, log_callback=None) -> TopVidClient:
     """
-    Havuzdaki hesapları kontrol eder.
-    Mevcut hesabın bakiyesi yetersizse otomatik olarak sonraki hesaba geçer!
-    Havuzdaki tüm hesaplar yetersizse anında yeni hesap açar.
+    PopVid mimarisine benzer şekilde çalışır.
+    Mevcut oturum varsa ve puanı yetiyorsa onu kullanır.
+    Bakiye yetersizse veya oturum yoksa tam o anda takviyeli yeni hesap açar.
+    Arka planda sunucuyu yoran döngü çalıştırmaz.
     """
-    global CURRENT_ACCOUNT_INDEX
-    with POOL_LOCK:
-        pool_size = len(ACCOUNT_POOL)
-        if pool_size > 0:
-            for offset in range(pool_size):
-                idx = (CURRENT_ACCOUNT_INDEX + offset) % pool_size
-                acc = ACCOUNT_POOL[idx]
-                client = acc["client"]
-                try:
-                    info = client.get_my_info().get("data", {})
-                    pts = info.get("point", acc.get("points", 0))
-                    acc["points"] = pts
-                    if pts >= needed_points:
-                        CURRENT_ACCOUNT_INDEX = idx
-                        if log_callback:
-                            log_callback(f"Hesap #{idx + 1} aktif (Bakiye: {pts} Puan / Gerekli: {needed_points})...", "registering", 15)
-                        return client
-                    else:
-                        if log_callback:
-                            log_callback(f"Hesap #{idx + 1} bakiyesi yetersiz ({pts} < {needed_points}), sıradaki hesaba geçiliyor...", "registering", 12)
-                except Exception:
-                    pass
+    global GLOBAL_TOPVID_CLIENT, GLOBAL_TOPVID_POINTS
+    with CLIENT_LOCK:
+        if GLOBAL_TOPVID_CLIENT is not None and GLOBAL_TOPVID_CLIENT.token:
+            try:
+                info = GLOBAL_TOPVID_CLIENT.get_my_info().get("data", {})
+                GLOBAL_TOPVID_POINTS = info.get("point", GLOBAL_TOPVID_POINTS)
+                if GLOBAL_TOPVID_POINTS >= needed_points:
+                    if log_callback:
+                        log_callback(f"Mevcut TopVid hesabı kullanılıyor (Bakiye: {GLOBAL_TOPVID_POINTS} Puan)...", "login", 15)
+                    return GLOBAL_TOPVID_CLIENT
+                else:
+                    if log_callback:
+                        log_callback(f"Mevcut hesabın bakiyesi tükendi ({GLOBAL_TOPVID_POINTS} < {needed_points} Puan). Yeni hesap açılıyor...", "registering", 12)
+            except Exception:
+                pass
 
-    # Eğer havuzda yeterli puan kalmadıysa anında yeni takviyeli hesap aç
-    if log_callback:
-        log_callback(f"Mevcut hesapların bakiyesi yetersiz. Yeni referanslı hesap açılıyor (Hedef: {needed_points} Puan)...", "registering", 15)
-    client, pts = create_boosted_account(target_points=needed_points)
-    with POOL_LOCK:
-        ACCOUNT_POOL.append({
-            "client": client,
-            "token": client.token,
-            "points": pts,
-            "created_at": time.time()
-        })
-        CURRENT_ACCOUNT_INDEX = len(ACCOUNT_POOL) - 1
-    return client
+        if log_callback:
+            log_callback(f"Yeni TopVid hesabı hazırlanıyor (+{needed_points} Puan)...", "registering", 15)
+        client, pts = create_boosted_account(target_points=needed_points)
+        GLOBAL_TOPVID_CLIENT = client
+        GLOBAL_TOPVID_POINTS = pts
+        if log_callback:
+            log_callback(f"Hesap hazırlandı! Bakiye: {pts} Puan", "login", 20)
+        return client
 
 
 # ==============================================================================
