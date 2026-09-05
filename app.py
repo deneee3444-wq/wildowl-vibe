@@ -1023,7 +1023,7 @@ def stream_job(job_id):
                 
             time.sleep(1)
             
-    return Response(generate(), mimetype='text/event-stream')
+    return Response(generate(), mimetype='text/event-stream', headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-cache'})
 
 @app.route('/api/generate/cancel/<job_id>', methods=['POST'])
 def cancel_job(job_id):
