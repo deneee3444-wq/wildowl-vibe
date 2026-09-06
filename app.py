@@ -32,6 +32,11 @@ try:
 except ImportError:
     topVidAI = None
 
+try:
+    import pixelBunnyAI
+except ImportError:
+    pixelBunnyAI = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -184,6 +189,7 @@ if hasattr(app, 'json'):
 # In-memory stores (RAM)
 GENERATION_HISTORY = []
 CUSTOM_PROMPTS = []
+CHAT_HISTORY = []
 ACTIVE_JOBS = {}
 
 APP_PASSWORD = "123"
@@ -295,6 +301,94 @@ def clear_prompts():
         return jsonify({'error': 'Unauthorized'}), 401
     global CUSTOM_PROMPTS
     CUSTOM_PROMPTS = []
+    return jsonify({'success': True})
+
+# AI CHAT APIS (PixelBunny Hermes-4-405B)
+@app.route('/api/chat/history')
+def get_chat_history():
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    return jsonify(CHAT_HISTORY)
+
+@app.route('/api/chat/system-prompt', methods=['GET', 'POST'])
+def chat_system_prompt():
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    if request.method == 'POST':
+        data = request.get_json(silent=True) or {}
+        new_prompt = data.get('system_prompt', '').strip()
+        if new_prompt and pixelBunnyAI:
+            pixelBunnyAI.DEFAULT_SYSTEM_PROMPT = new_prompt
+        return jsonify({'success': True, 'system_prompt': pixelBunnyAI.DEFAULT_SYSTEM_PROMPT if pixelBunnyAI else ""})
+    
+    sys_prompt = pixelBunnyAI.DEFAULT_SYSTEM_PROMPT if pixelBunnyAI else "Sen yardımsever, zeki, esprili ve samimi bir yapay zeka asistanısın. Kullanıcıya her zaman Türkçe olarak son derece detaylı, net, yaratıcı ve bilgilendirici cevaplar ver."
+    return jsonify({'system_prompt': sys_prompt})
+
+@app.route('/api/chat/send', methods=['POST'])
+def chat_send_message():
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    if not pixelBunnyAI:
+        return jsonify({'error': 'pixelBunnyAI modülü bulunamadı!'}), 500
+    
+    data = request.get_json(silent=True) or {}
+    message = data.get('message', '').strip()
+    is_system = data.get('is_system', False)
+    if not message:
+        return jsonify({'error': 'Mesaj boş olamaz!'}), 400
+    
+    try:
+        reply = pixelBunnyAI.chat_send(message)
+        now_str = time.strftime('%H:%M')
+        
+        if is_system:
+            # Sistem promptunun kendisi önyüzde görünmez ve listeye eklenmez.
+            # Yalnızca AI'ın bu ilk adıma verdiği asistan cevabı kaydedilir:
+            assistant_item = {
+                'id': uuid.uuid4().hex,
+                'role': 'assistant',
+                'text': reply,
+                'created_at': now_str
+            }
+            CHAT_HISTORY.append(assistant_item)
+            return jsonify({'success': True, 'reply': reply, 'item': assistant_item})
+        else:
+            user_item = {
+                'id': uuid.uuid4().hex,
+                'role': 'user',
+                'text': message,
+                'created_at': now_str
+            }
+            assistant_item = {
+                'id': uuid.uuid4().hex,
+                'role': 'assistant',
+                'text': reply,
+                'created_at': now_str
+            }
+            CHAT_HISTORY.append(user_item)
+            CHAT_HISTORY.append(assistant_item)
+            return jsonify({'success': True, 'reply': reply, 'user_item': user_item, 'assistant_item': assistant_item})
+    except Exception as e:
+        return jsonify({'error': str(e)}), 500
+
+@app.route('/api/chat/delete', methods=['POST'])
+def delete_chat_message():
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    item_id = request.json.get('id')
+    global CHAT_HISTORY
+    CHAT_HISTORY = [m for m in CHAT_HISTORY if m.get('id') != item_id]
+    return jsonify({'success': True})
+
+@app.route('/api/chat/reset', methods=['POST'])
+def chat_reset_session():
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    global CHAT_HISTORY
+    CHAT_HISTORY = []
+    if pixelBunnyAI:
+        pixelBunnyAI.chat_reset()
     return jsonify({'success': True})
 
 # DIRECT PROXY DOWNLOAD
@@ -1030,6 +1124,52 @@ def stream_job(job_id):
             time.sleep(1)
             
     return Response(generate(), mimetype='text/event-stream', headers={'X-Accel-Buffering': 'no', 'Cache-Control': 'no-cache'})
+
+# POLLING PROGRESS ENDPOINT (HTTP Request-based, works seamlessly even when tab is closed/reloaded)
+@app.route('/api/generate/poll/<job_id>')
+def poll_job(job_id):
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    
+    job = ACTIVE_JOBS.get(job_id)
+    if not job:
+        # Check history if already completed and archived
+        for h in GENERATION_HISTORY:
+            if h.get('task_id') == job_id or h.get('id') == job_id or h.get('job_id') == job_id:
+                return jsonify({
+                    'job_id': job_id,
+                    'status': 'completed',
+                    'pct': 100,
+                    'new_logs': [],
+                    'last_idx': 0,
+                    'outputs': [h.get('url')],
+                    'meme_id': h.get('meme_id'),
+                    'user_id': h.get('user_id'),
+                    'id_token': h.get('id_token'),
+                    'error': None
+                })
+        return jsonify({'status': 'not_found', 'error': 'İşlem bulunamadı'}), 404
+    
+    try:
+        last_idx = int(request.args.get('last_idx', 0))
+    except (ValueError, TypeError):
+        last_idx = 0
+        
+    all_logs = job.get('logs', [])
+    new_logs = all_logs[last_idx:] if last_idx < len(all_logs) else []
+    
+    return jsonify({
+        'job_id': job_id,
+        'status': job.get('status', 'running'),
+        'pct': job.get('pct', 0),
+        'new_logs': new_logs,
+        'last_idx': len(all_logs),
+        'outputs': job.get('outputs', []),
+        'meme_id': job.get('meme_id'),
+        'user_id': job.get('user_id'),
+        'id_token': job.get('id_token'),
+        'error': job.get('error')
+    })
 
 @app.route('/api/generate/cancel/<job_id>', methods=['POST'])
 def cancel_job(job_id):
