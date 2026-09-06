@@ -169,6 +169,7 @@ class TopVidClient:
         self.token = token
         self.session = requests.Session()
         self.fingerprint, self.user_agent = self.crypto.generate_fingerprint()
+        self.is_busy = False
 
     def _get_headers(self, is_encrypted: bool = True) -> Dict[str, str]:
         h = {
@@ -319,13 +320,24 @@ class TopVidClient:
 # ==============================================================================
 # 4. TEKİL & TAKVİYELİ HESAP AÇICI
 # ==============================================================================
-def create_boosted_account(num_refs: int = None, target_points: int = 160) -> Tuple[TopVidClient, int]:
-    """Yeni ana hesap açar ve referansla bakiye takviyesi (+50 puan/ref) yapar."""
+def create_boosted_account(num_refs: int = None, target_points: int = 160, log_callback=None) -> Tuple[TopVidClient, int]:
+    """Yeni ana hesap açar ve seçilen süre/çözünürlüğün hedef puanına (target_points) kadar referans takviyesi yapar."""
+    def _log(msg, status="registering", pct=None):
+        print(f"[TopVid Boost] {msg}")
+        if log_callback:
+            try:
+                log_callback(msg, status, pct)
+            except Exception:
+                pass
+
     if num_refs is None:
         num_refs = max(1, (target_points - 110 + 49) // 50)
+
+    _log(f"Tek kullanımlık hesap hazırlanıyor (Hedef: {target_points} Kredi)...", "registering", 10)
     master_mail = SpamokMail()
     master_client = TopVidClient()
     master_client.validate_email(master_mail.email)
+    _log(f"Doğrulama kodu bekleniyor ({master_mail.email})...", "registering", 15)
     m_code = master_mail.get_verification_code(timeout=40)
     if not m_code:
         raise Exception(f"Ana hesap OTP kodu alınamadı ({master_mail.email})")
@@ -340,6 +352,8 @@ def create_boosted_account(num_refs: int = None, target_points: int = 160) -> Tu
 
     if num_refs > 0 and invite_code:
         for i in range(num_refs):
+            calc_pct = 15 + int(((i + 1) / num_refs) * 12)
+            _log(f"Kredi takviyesi yapılıyor ({i+1}/{num_refs} ref | Hedef: {target_points} Puan)...", "registering", calc_pct)
             try:
                 ref_mail = SpamokMail()
                 ref_client = TopVidClient()
@@ -354,48 +368,54 @@ def create_boosted_account(num_refs: int = None, target_points: int = 160) -> Tu
         info = master_client.get_my_info().get("data", {})
         pts = info.get("point", pts)
 
+        # Hedef puanın altındaysa ek referans dene
+        retries = 0
+        while pts < target_points and retries < 2:
+            retries += 1
+            _log(f"Ek kredi takviyesi yapılıyor (Mevcut: {pts} / Hedef: {target_points} Puan)...", "registering", 26)
+            try:
+                ref_mail = SpamokMail()
+                ref_client = TopVidClient()
+                ref_client.validate_email(ref_mail.email)
+                r_code = ref_mail.get_verification_code(timeout=35)
+                if r_code:
+                    ref_client.login(ref_mail.email, r_code, invite_code=invite_code, auto_claim_sign_in=True)
+                info = master_client.get_my_info().get("data", {})
+                pts = info.get("point", pts)
+            except Exception:
+                pass
+
+    _log(f"Tek kullanımlık hesap hazırlandı! (Bakiye: {pts} Puan, Hedef: {target_points})", "login", 28)
     return master_client, pts
 
 
 # ==============================================================================
-# 5. İHTİYAÇ ANINDA ÇALIŞAN HESAP YÖNETİCİSİ (ON-DEMAND POOL)
+# 5. GÖREVE ÖZEL TEK KULLANIMLIK HESAP TAHSİS EDİCİ
 # ==============================================================================
-GLOBAL_TOPVID_CLIENT: Optional[TopVidClient] = None
-GLOBAL_TOPVID_POINTS: int = 0
-CLIENT_LOCK = threading.Lock()
+def calculate_needed_points(duration: Union[str, int] = "5", resolution: str = "720p") -> int:
+    """Wan 2.6 için süre ve çözünürlüğe göre gereken kesin kredi maliyetini hesaplar."""
+    dur = re.sub(r'[^0-9]', '', str(duration)) or "5"
+    res = "1080p" if "1080" in str(resolution).lower() else "720p"
+    price_table = {
+        ("720p", "5"): 160,
+        ("720p", "10"): 320,
+        ("720p", "15"): 480,
+        ("1080p", "5"): 240,
+        ("1080p", "10"): 480,
+        ("1080p", "15"): 720,
+    }
+    return price_table.get((res, dur), 160)
 
 
 def get_account_for_task(needed_points: int = 160, log_callback=None) -> TopVidClient:
     """
-    PopVid mimarisine benzer şekilde çalışır.
-    Mevcut oturum varsa ve puanı yetiyorsa onu kullanır.
-    Bakiye yetersizse veya oturum yoksa tam o anda takviyeli yeni hesap açar.
-    Arka planda sunucuyu yoran döngü çalıştırmaz.
+    Her video görevi için süre ve çözünürlük maliyetine göre tam gereken kredi puanına
+    (Örn: 720p 10s -> 320 Puan, 1080p 5s -> 240 Puan) sahip TEK KULLANIMLIK taze hesap açar.
+    Hesaplar tek kullanımlık olduğu için eşzamanlı ve ardışık tüm görevler sıfır çakışma
+    ve sıfır limit/bakiye hatası ile çalışır.
     """
-    global GLOBAL_TOPVID_CLIENT, GLOBAL_TOPVID_POINTS
-    with CLIENT_LOCK:
-        if GLOBAL_TOPVID_CLIENT is not None and GLOBAL_TOPVID_CLIENT.token:
-            try:
-                info = GLOBAL_TOPVID_CLIENT.get_my_info().get("data", {})
-                GLOBAL_TOPVID_POINTS = info.get("point", GLOBAL_TOPVID_POINTS)
-                if GLOBAL_TOPVID_POINTS >= needed_points:
-                    if log_callback:
-                        log_callback(f"Mevcut TopVid hesabı kullanılıyor (Bakiye: {GLOBAL_TOPVID_POINTS} Puan)...", "login", 15)
-                    return GLOBAL_TOPVID_CLIENT
-                else:
-                    if log_callback:
-                        log_callback(f"Mevcut hesabın bakiyesi tükendi ({GLOBAL_TOPVID_POINTS} < {needed_points} Puan). Yeni hesap açılıyor...", "registering", 12)
-            except Exception:
-                pass
-
-        if log_callback:
-            log_callback(f"Yeni TopVid hesabı hazırlanıyor (+{needed_points} Puan)...", "registering", 15)
-        client, pts = create_boosted_account(target_points=needed_points)
-        GLOBAL_TOPVID_CLIENT = client
-        GLOBAL_TOPVID_POINTS = pts
-        if log_callback:
-            log_callback(f"Hesap hazırlandı! Bakiye: {pts} Puan", "login", 20)
-        return client
+    client, _ = create_boosted_account(target_points=needed_points, log_callback=log_callback)
+    return client
 
 
 # ==============================================================================
@@ -413,6 +433,8 @@ def run_once(
     Wan 2.6 video üretim fonksiyonu.
     Görsel varsa Image-to-Video (tek kare, endframe yok), yoksa Text-to-Video çalışır.
     Resimdeki tüm varsayılan ayarlar kod içinde sabitlenmiştir.
+    Seçilen çözünürlük ve süreye göre gereken puanı (160, 240, 320, 480, 720) hesaplayıp
+    her görev için o puana özel tek kullanımlık taze hesap açar.
     """
     def _log(msg, status="info", pct=None):
         print(f"[TopVid Wan 2.6] {msg}")
@@ -429,20 +451,17 @@ def run_once(
     model_id = 131 if is_i2v else 130  # 130: Wan 2.6 T2V, 131: Wan 2.6 I2V
 
     norm_dur = re.sub(r'[^0-9]', '', str(duration)) or "5"
-    norm_res = resolution if resolution in ["720p", "1080p"] else "720p"
+    norm_res = "1080p" if "1080" in str(resolution).lower() else "720p"
     norm_ar = aspect_ratio if aspect_ratio in ["16:9", "9:16", "1:1", "4:3", "3:4"] else "16:9"
 
-    # Tahmini maliyet (720p 5s: 160, 10s: 320, 1080p 5s: 240)
-    needed_pts = 160
-    if norm_dur == "10":
-        needed_pts = 320
-    elif norm_res == "1080p":
-        needed_pts = 240
+    # Seçilen çözünürlük ve süreye göre gereken kesin kredi puanı (Örn: 720p 10s -> 320 Puan)
+    needed_pts = calculate_needed_points(duration=norm_dur, resolution=norm_res)
+    _log(f"Görev parametreleri: {norm_res} | {norm_dur}s -> Gereken Kredi: {needed_pts} Puan", "registering", 8)
 
-    # Havuzdan bakiye yeten hesabı al (yetersizse otomatik sonrakine geçer)
+    # Göreve özel tek kullanımlık tam takviyeli hesap aç
     client = get_account_for_task(needed_points=needed_pts, log_callback=_log)
 
-    _log("Video parametreleri hazırlanıyor...", "uploading", 25)
+    _log("Video parametreleri hazırlanıyor...", "uploading", 30)
 
     # RESİMDEKİ AYARLARIN TAMAMI VARSAYILAN KOD İÇİNDE SABİTLENDİ:
     payload = {
@@ -474,28 +493,37 @@ def run_once(
     # Image-to-Video ise görseli yükle (ENDFRAME YOK!)
     if is_i2v:
         _log("Referans başlangıç görseli sunucuya yükleniyor...", "uploading", 35)
-        img_url = client.upload_file(image_path)
+        try:
+            img_url = client.upload_file(image_path)
+        except Exception as up_err:
+            _log(f"Görsel yükleme uyarısı ({up_err}), yeni hesap ile deneniyor...", "uploading", 30)
+            client = get_account_for_task(needed_points=needed_pts, log_callback=_log)
+            img_url = client.upload_file(image_path)
         payload["image_url"] = img_url
         payload["start_image_url"] = img_url
         payload["first_image_url"] = img_url
         # "endframe de olmasın" kuralı gereği end_image_url kesinlikle eklenmez!
 
-    _log(f"Wan 2.6 görev isteği iletiliyor (Mod: {'I2V' if is_i2v else 'T2V'}, Çözünürlük: {norm_res}, Süre: {norm_dur}s)...", "generating", 45)
+    _log(f"Wan 2.6 görev isteği iletiliyor (Mod: {'I2V' if is_i2v else 'T2V'}, {norm_res}, {norm_dur}s, {needed_pts} Puan)...", "generating", 45)
 
     task_res = client.create_video_task(task_type=task_type, payload=payload)
     if task_res.get("code") != 200 or not task_res.get("data") or not task_res["data"].get("task"):
-        # Bakiye hatası veya benzeri olursa havuzdaki diğer hesabı dene
-        err_msg = task_res.get("msg") or str(task_res)
-        if "point" in err_msg.lower() or "balance" in err_msg.lower() or "credit" in err_msg.lower():
-            _log("Bakiye uyarısı alındı, sıradaki yedek hesaba geçilip tekrar deneniyor...", "registering", 20)
-            client = get_account_for_task(needed_points=needed_pts, log_callback=_log)
-            task_res = client.create_video_task(task_type=task_type, payload=payload)
+        err_msg = str(task_res.get("msg") or task_res)
+        _log(f"TopVid görev uyarısı: {err_msg}. Sıfırdan yeni takviyeli hesap açılıp tekrar deneniyor...", "registering", 15)
+        client = get_account_for_task(needed_points=needed_pts, log_callback=_log)
+        if is_i2v:
+            _log("Referans görsel yeni hesaba aktarılıyor...", "uploading", 35)
+            img_url = client.upload_file(image_path)
+            payload["image_url"] = img_url
+            payload["start_image_url"] = img_url
+            payload["first_image_url"] = img_url
+        task_res = client.create_video_task(task_type=task_type, payload=payload)
 
     if task_res.get("code") != 200 or not task_res.get("data") or not task_res["data"].get("task"):
         raise RuntimeError(f"TopVid Wan 2.6 görevi başlatılamadı: {task_res.get('msg') or task_res}")
 
     task_id = task_res["data"]["task"]["id"]
-    _log(f"Görev oluşturuldu! (Task ID: {task_id}) Video işleniyor...", "generating", 50)
+    _log(f"Görev oluşturuldu! (Task ID: {task_id}, Harcanan Kredi: {needed_pts} Puan) Video işleniyor...", "generating", 50)
 
     # Durum takibi (Polling)
     start_time = time.time()
