@@ -475,7 +475,7 @@ def run_once(
         # 1. Sansür Filtresi (Safety Checker): KAPALI (Sansürsüz)
         "enable_safety_checker": False,
         # 2. Prompt Expansion: KAPALI
-        "enable_prompt_expansion": False,
+        "enable_prompt_expansion": True,
         # 3. Multi-Shots: KAPALI
         "multi_shots": False,
         # 4. Sabit Kamera (Camera Fixed): KAPALI
@@ -483,7 +483,7 @@ def run_once(
         # 5. Sonsuz Döngü (Seamless Loop): KAPALI
         "loop": False,
         # 6. Auto Fix: AÇIK (Titreme & Renk Düzeltme)
-        "auto_fix": True,
+        "auto_fix": False,
         # 7. Hareket Şiddeti: Auto (Otomatik)
         "movement_amplitude": "auto",
         # 8. AI Ses Üretimi: AÇIK (Ortam Sesi / SFX)
