@@ -53,6 +53,15 @@ except ImportError:
             "aspect_ratios": ["16:9", "9:16", "1:1"],
             "resolution": "720p"
         },
+        "Wan 2.6 Video": {
+            "model_id": "wan-2.6-video",
+            "type": "video",
+            "tiers": ["5", "10", "15"],
+            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye", "15": "15 Saniye"},
+            "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+            "resolutions": ["720p", "1080p"],
+            "resolution": "720p"
+        },
         "Wan 2.7": {
             "model_id": "wan-2.7-image",
             "tiers": ["standard", "pro"],
@@ -102,13 +111,10 @@ except ImportError:
             "resolution": "1K"
         },
         "Wan 2.6": {
-            "model_id": "wan-2.6-video",
-            "type": "video",
-            "tiers": ["5", "10", "15"],
-            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye", "15": "15 Saniye"},
-            "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
-            "resolutions": ["720p", "1080p"],
-            "resolution": "720p"
+            "model_id": "wan-2.6-image",
+            "tiers": ["standard"],
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
+            "resolution": "1K"
         },
         "Z-Image Turbo": {
             "model_id": "z-image-turbo",
@@ -684,7 +690,7 @@ def run_job_in_background(job_id):
             return
 
         # TOPVID WAN 2.6 HANDLER
-        if model_name == "Wan 2.6":
+        if model_name in ["Wan 2.6 Video", "Wan 2.6 (Video)"]:
             if not topVidAI:
                 add_log("TopVid Wan 2.6 modülü yüklenemedi!", "error", 5)
                 if job_id in ACTIVE_JOBS:
