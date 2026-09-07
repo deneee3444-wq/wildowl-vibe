@@ -1020,7 +1020,7 @@ def run_job_in_background(job_id):
         }
         
         start_time = time.time()
-        max_duration = 300
+        max_duration = 900
         
         while True:
             if job_id not in ACTIVE_JOBS:
