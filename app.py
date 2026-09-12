@@ -7,6 +7,7 @@ import time
 import string
 import random
 import io
+import base64
 import requests
 import threading
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
@@ -37,6 +38,11 @@ try:
 except ImportError:
     pixelBunnyAI = None
 
+try:
+    import morphStudioAI
+except ImportError:
+    morphStudioAI = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -66,6 +72,38 @@ except ImportError:
             "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
             "resolutions": ["720p", "1080p"],
             "resolution": "720p"
+        },
+        "Seedance 1.5 Pro Fast": {
+            "model_id": "seedance_v1_pro_fast",
+            "type": "video",
+            "provider": "morph",
+            "tiers": ["5", "10"],
+            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye"},
+            "aspect_ratios": ["16:9", "9:16", "1:1"],
+            "resolutions": ["480p", "720p"],
+            "resolution": "480p"
+        },
+        "GPT Image 2.5 (Sunburst)": {
+            "model_id": "openai/gpt-image-2.5",
+            "type": "image",
+            "provider": "morph",
+            "mode": "sunburst",
+            "tiers": ["medium", "low"],
+            "tier_labels": {"medium": "Medium Kalite", "low": "Low Kalite"},
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "resolutions": ["2k", "1k", "4k"],
+            "resolution": "2k"
+        },
+        "GPT Image 2.5 (Flare)": {
+            "model_id": "openai/gpt-image-2.5",
+            "type": "image",
+            "provider": "morph",
+            "mode": "flare",
+            "tiers": ["medium", "low"],
+            "tier_labels": {"medium": "Medium Kalite", "low": "Low Kalite"},
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "resolutions": ["2k", "1k", "4k"],
+            "resolution": "2k"
         },
         "Wan 2.7": {
             "model_id": "wan-2.7-image",
@@ -853,6 +891,146 @@ def run_job_in_background(job_id):
                     except Exception:
                         pass
             return
+
+        # MORPH STUDIO HANDLER (Seedance 1.5 Pro Fast & GPT Image 2.5)
+        if model_name in ["Seedance 1.5 Pro Fast", "Seedance Pro Fast", "GPT Image 2.5 (Sunburst)", "GPT Image 2.5 (Flare)"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "morph"):
+            if not morphStudioAI:
+                add_log("Morph Studio modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'Morph Studio modülü bulunamadı.'
+                return
+
+            model_cfg = MODELS_CONFIG.get(model_name, {})
+            is_video = model_cfg.get("type") == "video"
+
+            if is_video:
+                add_log(f"Morph Studio ({model_name}) video motoru hazırlanıyor...", "registering", 5)
+                temp_img_path = None
+                if images and len(images) > 0:
+                    img_data = images[0]
+                    ext = ".jpg"
+                    if "png" in img_data.get("content_type", "").lower():
+                        ext = ".png"
+                    temp_dir = os.path.join(ROOT_DIR, "scratch")
+                    os.makedirs(temp_dir, exist_ok=True)
+                    temp_img_path = os.path.join(temp_dir, f"morph_vid_input_{job_id}{ext}")
+                    with open(temp_img_path, "wb") as f:
+                        f.write(img_data['content'])
+
+                try:
+                    duration = int(tier) if tier in ["5", "10"] else 5
+                    res_choice = resolution if resolution in ["480p", "720p"] else "480p"
+                    model_id = model_cfg.get("model_id", "seedance_v1_pro_fast")
+
+                    res = morphStudioAI.run_video(
+                        prompt=prompt,
+                        image_path=temp_img_path,
+                        model_id=model_id,
+                        duration=duration,
+                        resolution=res_choice,
+                        log_callback=add_log
+                    )
+                    output_url = res.get("output")
+                    if output_url:
+                        item = {
+                            'id': uuid.uuid4().hex,
+                            'url': output_url,
+                            'prompt': prompt,
+                            'model': model_name,
+                            'aspect_ratio': aspect_ratio or "16:9",
+                            'tier': str(duration),
+                            'resolution': res_choice,
+                            'type': "video",
+                            'node_id': res.get('node_id'),
+                            'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                        }
+                        GENERATION_HISTORY.insert(0, item)
+                        if job_id in ACTIVE_JOBS:
+                            ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                            ACTIVE_JOBS[job_id]['status'] = 'completed'
+                    else:
+                        raise RuntimeError("Morph Studio video üretimi URL üretmedi.")
+                except Exception as m_err:
+                    add_log(f"Morph Studio Video Hatası: {str(m_err)}", "error", 90)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['status'] = 'failed'
+                        ACTIVE_JOBS[job_id]['error'] = str(m_err)
+                finally:
+                    if temp_img_path and "morph_vid_input_" in temp_img_path and os.path.exists(temp_img_path):
+                        try:
+                            os.remove(temp_img_path)
+                        except Exception:
+                            pass
+                return
+
+            else:
+                # Image handler: GPT Image 2.5 (Sunburst / Flare)
+                add_log(f"Morph Studio ({model_name}) görsel motoru hazırlanıyor...", "registering", 5)
+                temp_img_paths = []
+                if images and len(images) > 0:
+                    temp_dir = os.path.join(ROOT_DIR, "scratch")
+                    os.makedirs(temp_dir, exist_ok=True)
+                    for idx, img_data in enumerate(images):
+                        ext = ".jpg"
+                        if "png" in img_data.get("content_type", "").lower():
+                            ext = ".png"
+                        p = os.path.join(temp_dir, f"morph_img_input_{job_id}_{idx}{ext}")
+                        with open(p, "wb") as f:
+                            f.write(img_data['content'])
+                        temp_img_paths.append(p)
+
+                try:
+                    model_id = model_cfg.get("model_id", "openai/gpt-image-2.5")
+                    mode = model_cfg.get("mode", "sunburst")
+                    ar_choice = aspect_ratio or "1:1"
+                    quality_choice = tier if tier in ["low", "medium"] else "medium"
+                    res_choice = resolution if resolution in ["1k", "2k", "4k"] else "2k"
+
+                    res = morphStudioAI.run_image(
+                        prompt=prompt,
+                        image_paths=temp_img_paths if temp_img_paths else None,
+                        model_id=model_id,
+                        mode=mode,
+                        aspect_ratio=ar_choice,
+                        quality=quality_choice,
+                        resolution=res_choice,
+                        log_callback=add_log
+                    )
+                    outputs = res.get("outputs", [])
+                    if outputs:
+                        for url in outputs:
+                            item = {
+                                'id': uuid.uuid4().hex,
+                                'url': url,
+                                'prompt': prompt,
+                                'model': model_name,
+                                'aspect_ratio': ar_choice,
+                                'tier': quality_choice,
+                                'resolution': res_choice,
+                                'type': "image",
+                                'node_id': res.get('node_id'),
+                                'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                            }
+                            GENERATION_HISTORY.insert(0, item)
+                        if job_id in ACTIVE_JOBS:
+                            ACTIVE_JOBS[job_id]['outputs'] = outputs
+                            ACTIVE_JOBS[job_id]['status'] = 'completed'
+                    else:
+                        raise RuntimeError("Morph Studio görsel üretimi URL üretmedi.")
+                except Exception as m_err:
+                    add_log(f"Morph Studio Görsel Hatası: {str(m_err)}", "error", 90)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['status'] = 'failed'
+                        ACTIVE_JOBS[job_id]['error'] = str(m_err)
+                finally:
+                    for p in temp_img_paths:
+                        if os.path.exists(p):
+                            try:
+                                os.remove(p)
+                            except Exception:
+                                pass
+                return
         
         # Step 1: E-posta oluşturma ve kayıt
         add_log("Spamok API üzerinden geçici e-posta alınıyor...", "registering", 10)
@@ -1020,7 +1198,7 @@ def run_job_in_background(job_id):
         }
         
         start_time = time.time()
-        max_duration = 900
+        max_duration = 300
         
         while True:
             if job_id not in ACTIVE_JOBS:
@@ -1187,6 +1365,18 @@ def get_active_jobs():
     
     active_list = {}
     for jid, job in ACTIVE_JOBS.items():
+        ref_preview = None
+        if job.get('images') and len(job['images']) > 0:
+            first_img = job['images'][0]
+            try:
+                c_type = first_img.get('content_type', 'image/jpeg')
+                b64 = base64.b64encode(first_img['content']).decode('utf-8')
+                ref_preview = f"data:{c_type};base64,{b64}"
+            except Exception:
+                ref_preview = None
+        elif job.get('extend_video_url'):
+            ref_preview = job.get('extend_video_url')
+
         active_list[jid] = {
             'prompt': job['prompt'],
             'model': job['model'],
@@ -1198,6 +1388,7 @@ def get_active_jobs():
             'pct': job['pct'],
             'logs': job['logs'],
             'outputs': job.get('outputs', []),
+            'ref_preview': ref_preview,
             'meme_id': job.get('meme_id'),
             'user_id': job.get('user_id'),
             'id_token': job.get('id_token'),
