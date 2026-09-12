@@ -530,6 +530,11 @@
             text-align: left;
             position: relative;
             overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            justify-content: space-between;
+            min-height: 84px;
+            height: 100%;
         }
 
         .select-card:hover {
@@ -548,11 +553,13 @@
             font-weight: 700;
             color: var(--text-main);
             margin-bottom: 4px;
+            line-height: 1.3;
         }
 
         .select-card-detail {
             font-size: 0.7rem;
             color: var(--text-muted);
+            margin-top: auto;
         }
 
         /* CHIPS CONTAINER */
@@ -717,6 +724,7 @@
             grid-template-columns: repeat(4, 1fr);
             gap: 6px;
             max-width: 100%;
+            align-items: stretch;
         }
 
         .job-card {
@@ -729,7 +737,8 @@
             flex-direction: column;
             transition: var(--transition-smooth);
             animation: scale-up 0.3s cubic-bezier(0.16, 1, 0.3, 1);
-            height: fit-content;
+            height: 100%;
+            min-height: 100%;
             position: relative;
         }
 
@@ -806,6 +815,8 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
+            flex-grow: 1;
+            justify-content: space-between;
         }
 
         .job-title-prompt-row {
@@ -832,6 +843,8 @@
             display: flex;
             flex-wrap: wrap;
             gap: 3px;
+            min-height: 42px;
+            align-content: flex-start;
         }
 
         .spec-chip {
@@ -926,6 +939,7 @@
             display: flex;
             flex-direction: column;
             gap: 2px;
+            margin-top: auto;
         }
 
         .console-line {
@@ -1050,6 +1064,7 @@
             transition: var(--transition-smooth);
             display: flex;
             flex-direction: column;
+            height: 100%;
         }
 
         .gallery-card:hover {
@@ -1104,6 +1119,8 @@
             display: flex;
             flex-direction: column;
             gap: 6px;
+            flex-grow: 1;
+            justify-content: space-between;
         }
 
         .gallery-card-prompt-row {
@@ -1129,6 +1146,8 @@
             display: flex;
             flex-wrap: wrap;
             gap: 3px;
+            min-height: 42px;
+            align-content: flex-start;
         }
 
         .gallery-close-btn {
@@ -2655,7 +2674,7 @@
             
             let bannerHtml = '';
             if (refImgUrl) {
-                const isVid = refImgUrl.endsWith('.mp4') || isVidModel;
+                const isVid = typeof refImgUrl === 'string' && (refImgUrl.endsWith('.mp4') || refImgUrl.includes('.mp4') || refImgUrl.startsWith('data:video'));
                 if (isVid) {
                     bannerHtml = `<video id="banner-img-${jobId}" src="${refImgUrl}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`;
                 } else {
@@ -2839,10 +2858,12 @@
                         if (data.outputs && data.outputs.length > 0) {
                             const bannerImg = document.getElementById(`banner-img-${jobId}`);
                             const outputUrl = data.outputs[0];
-                            const isVideo = outputUrl.includes('.mp4') || model === 'Vibe Video' || model === 'Pop Vid' || (model && model.includes('Wan 2.6'));
+                            const isVidModelOutput = isVidModel || (modelsConfig[model] && modelsConfig[model].type === 'video') || (model && (model.includes('Wan 2.6') || model.includes('Seedance')));
+                            const isVideo = outputUrl.includes('.mp4') || isVidModelOutput;
 
                             if (bannerImg) {
                                 if (isVideo) {
+                                    const posterUrl = (bannerImg.tagName === 'IMG' && bannerImg.src) ? bannerImg.src : '';
                                     const vid = document.createElement('video');
                                     vid.id = `banner-img-${jobId}`;
                                     vid.src = outputUrl;
@@ -2850,6 +2871,10 @@
                                     vid.loop = true;
                                     vid.muted = true;
                                     vid.playsInline = true;
+                                    vid.preload = 'auto';
+                                    if (posterUrl && !posterUrl.includes('.mp4')) {
+                                        vid.poster = posterUrl;
+                                    }
                                     vid.style.width = '100%';
                                     vid.style.height = '100%';
                                     vid.style.objectFit = 'cover';
@@ -2944,7 +2969,7 @@
                     document.getElementById('generationsEmpty').style.display = 'flex';
                 }
                 for (const [jobId, job] of Object.entries(jobs)) {
-                    createJobCard(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.num_images, job.outputs.length > 0 ? job.outputs[0] : null, job.meme_id, job.user_id, job.id_token);
+                    createJobCard(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.num_images, job.outputs.length > 0 ? job.outputs[0] : (job.ref_preview || null), job.meme_id, job.user_id, job.id_token);
                     
                     const consoleBox = document.getElementById(`console-${jobId}`);
                     const badge = document.getElementById(`badge-${jobId}`);
@@ -3102,10 +3127,10 @@
                 
                 const safePrompt = item.prompt.replace(/'/g, "\\'");
                 const downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}`;
-                const isVideo = item.type === 'video' || (item.url && item.url.includes('.mp4')) || item.model === 'Vibe Video' || item.model === 'Pop Vid';
+                const isVideo = item.type === 'video' || (item.url && item.url.includes('.mp4')) || item.model === 'Vibe Video' || item.model === 'Pop Vid' || (modelsConfig[item.model] && modelsConfig[item.model].type === 'video') || (item.model && item.model.includes('Seedance'));
                 
                 const mediaHtml = isVideo
-                    ? `<video src="${item.url}" autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: cover;"></video>`
+                    ? `<video src="${item.url}" autoplay loop muted playsinline preload="auto" style="width: 100%; height: 100%; object-fit: cover;"></video>`
                     : `<img src="${item.url}" alt="Gallery generation" loading="lazy">`;
                 
                 let extendBtnHtml = '';
@@ -3169,7 +3194,7 @@
         function openLightbox(url, prompt, model, ratio, tier, id, memeId, userId, idToken) {
             const lb = document.getElementById('lightbox');
             const mediaPane = document.getElementById('lightboxMediaPane');
-            const isVideo = url.includes('.mp4') || model === 'Vibe Video' || model === 'Pop Vid';
+            const isVideo = url.includes('.mp4') || model === 'Vibe Video' || model === 'Pop Vid' || (modelsConfig[model] && modelsConfig[model].type === 'video') || (model && (model.includes('Wan 2.6') || model.includes('Seedance')));
             
             if (isVideo) {
                 mediaPane.innerHTML = `<video id="lightboxVid" src="${url}" controls autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: contain; background: black;"></video>`;
