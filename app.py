@@ -89,7 +89,7 @@ except ImportError:
             "mode": "sunburst",
             "tiers": ["medium", "low"],
             "tier_labels": {"medium": "Medium Kalite", "low": "Low Kalite"},
-            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"],
             "resolutions": ["2k", "1k", "4k"],
             "resolution": "2k"
         },
@@ -100,7 +100,7 @@ except ImportError:
             "mode": "flare",
             "tiers": ["medium", "low"],
             "tier_labels": {"medium": "Medium Kalite", "low": "Low Kalite"},
-            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"],
             "resolutions": ["2k", "1k", "4k"],
             "resolution": "2k"
         },
