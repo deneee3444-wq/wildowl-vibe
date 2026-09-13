@@ -7,7 +7,6 @@ import time
 import string
 import random
 import io
-import base64
 import requests
 import threading
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
@@ -1365,18 +1364,6 @@ def get_active_jobs():
     
     active_list = {}
     for jid, job in ACTIVE_JOBS.items():
-        ref_preview = None
-        if job.get('images') and len(job['images']) > 0:
-            first_img = job['images'][0]
-            try:
-                c_type = first_img.get('content_type', 'image/jpeg')
-                b64 = base64.b64encode(first_img['content']).decode('utf-8')
-                ref_preview = f"data:{c_type};base64,{b64}"
-            except Exception:
-                ref_preview = None
-        elif job.get('extend_video_url'):
-            ref_preview = job.get('extend_video_url')
-
         active_list[jid] = {
             'prompt': job['prompt'],
             'model': job['model'],
@@ -1388,7 +1375,6 @@ def get_active_jobs():
             'pct': job['pct'],
             'logs': job['logs'],
             'outputs': job.get('outputs', []),
-            'ref_preview': ref_preview,
             'meme_id': job.get('meme_id'),
             'user_id': job.get('user_id'),
             'id_token': job.get('id_token'),
