@@ -516,7 +516,7 @@
         /* GRID/CARD STYLING FOR SELECTION */
         .select-grid {
             display: grid;
-            grid-template-columns: repeat(2, 1fr);
+            grid-template-columns: repeat(2, minmax(0, 1fr));
             gap: 10px;
         }
 
@@ -530,11 +530,7 @@
             text-align: left;
             position: relative;
             overflow: hidden;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            min-height: 84px;
-            height: 100%;
+            min-width: 0;
         }
 
         .select-card:hover {
@@ -554,12 +550,19 @@
             color: var(--text-main);
             margin-bottom: 4px;
             line-height: 1.3;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
         }
 
         .select-card-detail {
             font-size: 0.7rem;
             color: var(--text-muted);
-            margin-top: auto;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            min-width: 0;
         }
 
         /* CHIPS CONTAINER */
@@ -2301,6 +2304,26 @@
         let userPrompts = [];
         const activeStreams = {};
 
+        // Helper: Check if model produces video (prevents false positives on image models like Wan 2.6)
+        function isVideoModel(modelName) {
+            if (!modelName) return false;
+            if (modelsConfig && modelsConfig[modelName] && modelsConfig[modelName].type) {
+                return modelsConfig[modelName].type === 'video';
+            }
+            const lower = String(modelName).trim().toLowerCase();
+            return lower === 'vibe video' || lower === 'pop vid' || lower === 'wan 2.6 video' || lower.includes('seedance');
+        }
+
+        // Helper: Check if an output/media item is a video
+        function isVideoOutput(url, modelName) {
+            if (url && typeof url === 'string') {
+                const u = url.toLowerCase().split('?')[0];
+                if (u.endsWith('.mp4') || u.endsWith('.webm') || u.endsWith('.mov') || u.endsWith('.mkv')) return true;
+                if (url.includes('.mp4')) return true;
+            }
+            return isVideoModel(modelName);
+        }
+
         // App Initialization
         document.addEventListener('DOMContentLoaded', () => {
             fetchModels();
@@ -2386,9 +2409,10 @@
                 card.onclick = () => selectModel(name);
                 
                 const isVid = config.type === 'video';
+                card.title = name;
                 card.innerHTML = `
-                    <div class="select-card-name">${name} ${isVid ? '🎬' : ''}</div>
-                    <div class="select-card-detail">${isVid ? 'Video Üretimi' : 'Çözünürlük: ' + config.resolution}</div>
+                    <div class="select-card-name" title="${name}">${isVid ? '🎬 ' : ''}${name}</div>
+                    <div class="select-card-detail">${isVid ? 'Video Üretimi' : 'Çözünürlük: ' + (config.resolution || 'Standart')}</div>
                 `;
                 grid.appendChild(card);
                 
@@ -2670,7 +2694,7 @@
             // Escape single quotes for inline JS safety
             const safePrompt = prompt.replace(/'/g, "\\'");
             
-            const isVidModel = model === 'Vibe Video' || model === 'Pop Vid' || (modelsConfig[model] && modelsConfig[model].type === 'video');
+            const isVidModel = isVideoModel(model);
             
             let bannerHtml = '';
             if (refImgUrl) {
@@ -2858,8 +2882,7 @@
                         if (data.outputs && data.outputs.length > 0) {
                             const bannerImg = document.getElementById(`banner-img-${jobId}`);
                             const outputUrl = data.outputs[0];
-                            const isVidModelOutput = isVidModel || (modelsConfig[model] && modelsConfig[model].type === 'video') || (model && (model.includes('Wan 2.6') || model.includes('Seedance')));
-                            const isVideo = outputUrl.includes('.mp4') || isVidModelOutput;
+                            const isVideo = isVideoOutput(outputUrl, model);
 
                             if (bannerImg) {
                                 if (isVideo) {
@@ -2969,7 +2992,7 @@
                     document.getElementById('generationsEmpty').style.display = 'flex';
                 }
                 for (const [jobId, job] of Object.entries(jobs)) {
-                    createJobCard(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.num_images, job.outputs.length > 0 ? job.outputs[0] : (job.ref_preview || null), job.meme_id, job.user_id, job.id_token);
+                    createJobCard(jobId, job.prompt, job.model, job.aspect_ratio, job.tier, job.num_images, job.outputs.length > 0 ? job.outputs[0] : null, job.meme_id, job.user_id, job.id_token);
                     
                     const consoleBox = document.getElementById(`console-${jobId}`);
                     const badge = document.getElementById(`badge-${jobId}`);
@@ -3127,7 +3150,7 @@
                 
                 const safePrompt = item.prompt.replace(/'/g, "\\'");
                 const downloadUrl = `/api/download?url=${encodeURIComponent(item.url)}`;
-                const isVideo = item.type === 'video' || (item.url && item.url.includes('.mp4')) || item.model === 'Vibe Video' || item.model === 'Pop Vid' || (modelsConfig[item.model] && modelsConfig[item.model].type === 'video') || (item.model && item.model.includes('Seedance'));
+                const isVideo = item.type === 'video' || isVideoOutput(item.url, item.model);
                 
                 const mediaHtml = isVideo
                     ? `<video src="${item.url}" autoplay loop muted playsinline preload="auto" style="width: 100%; height: 100%; object-fit: cover;"></video>`
@@ -3194,7 +3217,7 @@
         function openLightbox(url, prompt, model, ratio, tier, id, memeId, userId, idToken) {
             const lb = document.getElementById('lightbox');
             const mediaPane = document.getElementById('lightboxMediaPane');
-            const isVideo = url.includes('.mp4') || model === 'Vibe Video' || model === 'Pop Vid' || (modelsConfig[model] && modelsConfig[model].type === 'video') || (model && (model.includes('Wan 2.6') || model.includes('Seedance')));
+            const isVideo = isVideoOutput(url, model);
             
             if (isVideo) {
                 mediaPane.innerHTML = `<video id="lightboxVid" src="${url}" controls autoplay loop muted playsinline style="width: 100%; height: 100%; object-fit: contain; background: black;"></video>`;
