@@ -17,7 +17,7 @@ Desteklenen Modeller:
    - 2 Farklı Mod: "sunburst" ve "flare"
    - Çözünürlük: 1k, 2k, 4k
    - Kalite: low, medium
-   - En-boy oranları: 1:1, 16:9, 9:16, 4:3, 3:4, 3:2, 2:3, 21:9
+   - En-boy oranları: "1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"
    - Çoklu referans görsel (I2I) veya salt metin (T2I)
 ================================================================================
 """
