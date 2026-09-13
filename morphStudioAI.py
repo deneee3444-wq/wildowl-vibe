@@ -468,42 +468,21 @@ class MorphStudioClient:
 
 
 # ==============================================================================
-# 3. OTURUM HAVUZU (SESSION POOL)
+# 3. OTURUM YÖNETİMİ
 # ==============================================================================
-GLOBAL_CLIENT: Optional[MorphStudioClient] = None
-CLIENT_LOCK = threading.Lock()
+def create_new_client(log_callback=None) -> MorphStudioClient:
+    """Her görev için yeni, bağımsız ve tek kullanımlık bir Morph Studio hesabı açar."""
+    if log_callback:
+        log_callback("Yeni Morph Studio hesabı oluşturuluyor...", "registering", 10)
+    new_client = MorphStudioClient()
+    if not new_client.signup_and_verify(log_callback=log_callback):
+        raise RuntimeError("Morph Studio hesabı oluşturulamadı veya doğrulanamadı.")
+    return new_client
 
 
 def get_or_create_client(log_callback=None) -> MorphStudioClient:
-    """Mevcut oturum varsa onu kullanır, yoksa yeni hesap açar."""
-    global GLOBAL_CLIENT
-    with CLIENT_LOCK:
-        if GLOBAL_CLIENT is not None and GLOBAL_CLIENT.user_id:
-            if log_callback:
-                log_callback(f"Mevcut Morph Studio hesabı kullanılıyor ({GLOBAL_CLIENT.email})...", "login", 20)
-            return GLOBAL_CLIENT
-
-        if log_callback:
-            log_callback("Morph Studio oturumu oluşturuluyor...", "registering", 10)
-
-        new_client = MorphStudioClient()
-        if not new_client.signup_and_verify(log_callback=log_callback):
-            raise RuntimeError("Morph Studio hesabı oluşturulamadı veya doğrulanamadı.")
-        GLOBAL_CLIENT = new_client
-        return GLOBAL_CLIENT
-
-
-def create_new_client(log_callback=None) -> MorphStudioClient:
-    """Zorla yeni bir Morph Studio hesabı açar ve global oturumu günceller."""
-    global GLOBAL_CLIENT
-    with CLIENT_LOCK:
-        if log_callback:
-            log_callback("Yeni Morph Studio hesabı oluşturuluyor...", "registering", 10)
-        new_client = MorphStudioClient()
-        if not new_client.signup_and_verify(log_callback=log_callback):
-            raise RuntimeError("Morph Studio hesabı oluşturulamadı.")
-        GLOBAL_CLIENT = new_client
-        return GLOBAL_CLIENT
+    """Her görevde her zaman yeni bir Morph Studio hesabı açar."""
+    return create_new_client(log_callback=log_callback)
 
 
 # ==============================================================================
@@ -519,7 +498,7 @@ def run_video(
 ) -> Dict[str, Any]:
     """
     Seedance Pro Fast video üretimi fonksiyonu.
-    Mevcut hesabı kullanır, hata durumunda yeni hesap açıp tekrar dener.
+    Her görev için sıfırdan yeni ve bağımsız bir hesap açar.
     """
     def _log(msg, status="info", pct=None):
         print(f"[run_video] {msg}")
@@ -530,7 +509,7 @@ def run_video(
                 pass
 
     _log("Morph Studio video motoru hazırlanıyor...", "registering", 10)
-    client = get_or_create_client(log_callback=_log)
+    client = create_new_client(log_callback=_log)
 
     object_id = ""
     if image_path and os.path.exists(image_path):
@@ -617,7 +596,7 @@ def run_image(
                 pass
 
     _log("Morph Studio görsel motoru hazırlanıyor...", "registering", 10)
-    client = get_or_create_client(log_callback=_log)
+    client = create_new_client(log_callback=_log)
 
     uploaded_images = []
     if image_paths:
