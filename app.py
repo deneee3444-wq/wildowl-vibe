@@ -72,7 +72,7 @@ except ImportError:
             "resolutions": ["720p", "1080p"],
             "resolution": "720p"
         },
-        "Seedance 1.5 Pro Fast": {
+        "Seedance 1.0 Pro Fast": {
             "model_id": "seedance_v1_pro_fast",
             "type": "video",
             "provider": "morph",
@@ -891,8 +891,8 @@ def run_job_in_background(job_id):
                         pass
             return
 
-        # MORPH STUDIO HANDLER (Seedance 1.5 Pro Fast & GPT Image 2.5)
-        if model_name in ["Seedance 1.5 Pro Fast", "Seedance Pro Fast", "GPT Image 2.5 (Sunburst)", "GPT Image 2.5 (Flare)"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "morph"):
+        # MORPH STUDIO HANDLER (Seedance 1.0 Pro Fast & GPT Image 2.5)
+        if model_name in ["Seedance 1.0 Pro Fast", "Seedance Pro Fast", "GPT Image 2.5 (Sunburst)", "GPT Image 2.5 (Flare)"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "morph"):
             if not morphStudioAI:
                 add_log("Morph Studio modülü yüklenemedi!", "error", 5)
                 if job_id in ACTIVE_JOBS:
