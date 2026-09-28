@@ -33,7 +33,7 @@
             --shadow: 0 18px 65px #0007;
             --header-height: 62px;
             --tabs-height: 54px;
-            --sidebar-width: 300px;
+            --sidebar-width: 320px;
             --task-height: clamp(210px, calc((100dvh - 195px) / 2), 360px);
         }
 
@@ -221,43 +221,60 @@
             min-height: 0;
         }
         .creator-heading {
-            padding: 8px 14px 4px;
+            padding: 10px 14px 6px;
             display: flex;
             align-items: center;
             justify-content: space-between;
         }
-        .creator-heading h2 { margin: 0; font-size: 12px; font-weight: 600; }
-        .eyebrow { color: var(--faint); font-size: 9.5px; letter-spacing: 1.2px; text-transform: uppercase; }
-        .creator-body { padding: 2px 12px 4px; overflow-y: auto; flex: 1; min-height: 0; }
-        .creator-body .field-label { margin-bottom: 4px; font-size: 10.5px; }
-        .control-group { margin-bottom: 6px; }
+        .creator-heading h2 { margin: 0; font-size: 13px; font-weight: 600; }
+        .eyebrow { color: var(--faint); font-size: 10px; letter-spacing: 1.2px; text-transform: uppercase; }
+        .creator-body {
+            padding: 4px 14px 10px;
+            overflow-y: auto;
+            flex: 1;
+            min-height: 0;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+        .creator-body .field-label {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 5px;
+            font-size: 11.5px;
+            font-weight: 500;
+        }
+        .control-group { margin-bottom: 0; }
 
         .mode-switch {
             display: flex;
-            gap: 3px;
-            border-radius: 9px;
+            gap: 4px;
+            border-radius: 10px;
             background: var(--bg);
-            padding: 2px;
-            margin-bottom: 6px;
+            padding: 3px;
+            margin-bottom: 2px;
         }
         .mode-btn {
             flex: 1;
+            min-height: 34px;
             border: 0;
             background: transparent;
-            border-radius: 7px;
-            padding: 4px 6px;
+            border-radius: 8px;
+            padding: 6px 10px;
             display: flex;
             justify-content: center;
             align-items: center;
-            gap: 6px;
+            gap: 7px;
             color: var(--muted);
-            font-size: 11px;
+            font-size: 12.5px;
+            font-weight: 500;
         }
-        .mode-btn .icon { width: 14px; height: 14px; }
+        .mode-btn .icon { width: 16px; height: 16px; }
         .mode-btn.active { color: var(--text); background: var(--surface-3); }
         .mode-btn:disabled { opacity: .3; }
 
-        .creator-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 0 8px; margin-bottom: 0; }
+        .creator-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 2px; }
         .creator-settings .model-group { grid-column: 1 / -1; }
         .creator-settings #resolutionSection { grid-column: 1 / -1; }
 
@@ -267,31 +284,31 @@
         .combo { min-width: 0; }
         .combo-trigger {
             width: 100%;
-            min-height: 32px;
+            min-height: 38px;
             display: flex;
             align-items: center;
-            gap: 6px;
+            gap: 8px;
             text-align: left;
-            padding: 4px 8px;
+            padding: 6px 10px;
             background: var(--surface-2);
             border: 1px solid var(--line-strong);
-            border-radius: 8px;
+            border-radius: 9px;
             transition: border-color .15s, background .15s, box-shadow .15s;
         }
         .combo-trigger:hover { background: #24262a; }
         .combo-trigger[aria-expanded="true"] { border-color: #d8f58a65; box-shadow: 0 0 0 3px #d8f58a18, 0 0 12px #d8f58a0d; }
         .combo-leading { color: var(--muted); display: flex; }
-        .combo-leading .icon { width: 16px; height: 16px; }
+        .combo-leading .icon { width: 17px; height: 17px; }
         .combo-value {
             flex: 1;
             min-width: 0;
             white-space: nowrap;
             overflow: hidden;
             text-overflow: ellipsis;
-            font-size: 12px;
+            font-size: 12.5px;
             font-weight: 500;
         }
-        .combo-chevron { width: 13px; height: 13px; color: var(--faint); }
+        .combo-chevron { width: 14px; height: 14px; color: var(--faint); }
         .combo-menu {
             position: fixed;
             z-index: 500;
@@ -312,42 +329,42 @@
         }
         .combo-search {
             width: 100%;
-            height: 34px;
+            height: 36px;
             padding: 6px 9px 6px 32px;
             background: #151619;
             color: var(--text);
             border: 1px solid var(--line);
             border-radius: 8px;
-            font-size: 12px;
+            font-size: 12.5px;
         }
         .combo-options { overflow-y: auto; max-height: 244px; }
         .combo-option {
             display: flex;
             align-items: center;
             gap: 9px;
-            min-height: 39px;
-            padding: 8px 9px;
+            min-height: 40px;
+            padding: 8px 10px;
             border-radius: 7px;
             cursor: pointer;
-            font-size: 12px;
+            font-size: 12.5px;
         }
         .combo-option:hover, .combo-option.focused { background: #ffffff09; }
         .combo-option[aria-selected="true"] { background: #d8f58a0c; color: var(--accent); }
         .combo-option-text { flex: 1; min-width: 0; }
-        .combo-option-text small { display: block; font-size: 10px; color: var(--muted); margin-top: 2px; }
-        .combo-option .icon { width: 15px; height: 15px; }
+        .combo-option-text small { display: block; font-size: 10.5px; color: var(--muted); margin-top: 2px; }
+        .combo-option .icon { width: 16px; height: 16px; }
         .combo-no-result { padding: 18px 10px; color: var(--muted); font-size: 12px; }
 
         /* Reference uploads */
         .reference-zone {
             display: flex;
             align-items: center;
-            gap: 8px;
-            min-height: 36px;
-            border-radius: 8px;
+            gap: 10px;
+            min-height: 44px;
+            border-radius: 9px;
             background: var(--surface);
             border: 1px dashed #ffffff19;
-            padding: 5px 8px;
+            padding: 7px 10px;
             cursor: pointer;
             transition: border-color .15s, background .15s;
         }
@@ -355,13 +372,13 @@
             border-color: #d8f58a65;
             background: #d8f58a05;
         }
-        .reference-zone > .icon { color: var(--muted); width: 16px; height: 16px; }
-        .reference-zone strong { display: block; font-size: 10px; font-weight: 500; }
-        .reference-zone small { display: block; color: var(--faint); font-size: 9px; margin-top: 1px; }
+        .reference-zone > .icon { color: var(--muted); width: 18px; height: 18px; }
+        .reference-zone strong { display: block; font-size: 11px; font-weight: 500; }
+        .reference-zone small { display: block; color: var(--faint); font-size: 9.5px; margin-top: 2px; }
         .reference-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 6px; }
         .reference-tile {
             position: relative;
-            height: 48px;
+            height: 52px;
             border-radius: 8px;
             overflow: hidden;
             background: var(--surface-2);
@@ -397,7 +414,18 @@
             color: var(--muted);
         }
 
+        .prompt-group {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 100px;
+            margin-bottom: 0;
+        }
         .prompt-shell {
+            flex: 1 1 auto;
+            display: flex;
+            flex-direction: column;
+            min-height: 85px;
             border: 1px solid var(--line-strong);
             border-radius: 10px;
             background: var(--bg);
@@ -406,40 +434,43 @@
         }
         .prompt-shell:focus-within { border-color: #d8f58a80; box-shadow: 0 0 0 3px #d8f58a20, 0 0 16px #d8f58a10; }
         .main-prompt {
+            flex: 1 1 auto;
             display: block;
             width: 100%;
-            min-height: 54px;
-            max-height: 120px;
-            padding: 6px 8px;
+            height: 100%;
+            min-height: 65px;
+            max-height: none;
+            padding: 8px 10px;
             background: transparent;
             border: 0;
             color: var(--text);
-            resize: vertical;
-            line-height: 1.45;
-            font-size: 11.5px;
+            resize: none;
+            line-height: 1.5;
+            font-size: 12.5px;
         }
         .main-prompt::placeholder { color: var(--faint); }
         .prompt-footer {
-            padding: 2px 4px;
+            padding: 4px 6px;
             display: flex;
             align-items: center;
             justify-content: space-between;
             gap: 4px;
         }
-        .prompt-footer .icon-btn { width: 24px; min-height: 24px; padding: 3px; }
-        .prompt-length { color: var(--faint); font-size: 9px; padding-left: 4px; }
+        .prompt-footer .icon-btn { width: 28px; min-height: 28px; padding: 4px; border-radius: 6px; }
+        .prompt-footer .icon-btn .icon { width: 14px; height: 14px; }
+        .prompt-length { color: var(--faint); font-size: 10px; padding-left: 4px; }
         .prompt-tools { display: flex; gap: 2px; }
 
-        .creator-footer { padding: 6px 12px 8px; border-top: 1px solid var(--line); }
-        .generate-btn { width: 100%; min-height: 38px; font-size: 12px; border-radius: 8px; }
+        .creator-footer { padding: 8px 14px 10px; border-top: 1px solid var(--line); }
+        .generate-btn { width: 100%; min-height: 42px; font-size: 13.5px; font-weight: 600; border-radius: 9px; gap: 8px; }
         .generate-shortcut {
             margin-left: auto;
-            font-size: 9px;
+            font-size: 10px;
             background: #0000000c;
             border-radius: 4px;
-            padding: 2px 5px;
+            padding: 2px 6px;
         }
-        .generate-btn > .icon { width: 16px; height: 16px; }
+        .generate-btn > .icon { width: 17px; height: 17px; }
 
         /* Main navigation */
         .main { flex: 1; min-width: 0; min-height: 0; display: flex; flex-direction: column; }
@@ -1039,20 +1070,8 @@
         @keyframes breathe { 50% { opacity: .3; } }
         @keyframes toast-in { from { transform: translateY(-16px); opacity: 0; } to { transform: translateY(0); opacity: 1; } }
 
-        @media (min-width: 1101px) and (max-height: 780px) {
-            :root { --sidebar-width: 278px; }
-            .creator-heading { padding-top: 12px; padding-bottom: 8px; }
-            .creator-body { padding-top: 0; }
-            .control-group { margin-bottom: 12px; }
-            .mode-switch { margin-bottom: 13px; }
-            .main-prompt { min-height: 105px; }
-            .reference-zone { min-height: 58px; }
-            .reference-tile { height: 55px; }
-            .creator-footer { padding-top: 10px; padding-bottom: 10px; }
-        }
-
         @media (max-width: 1100px) {
-            :root { --sidebar-width: 250px; }
+            :root { --sidebar-width: 285px; }
             .task-grid, .gallery-grid { grid-template-columns: repeat(5, minmax(0, 1fr)); grid-auto-rows: var(--task-height); gap: 6px; }
             .header-note { display: none; }
             .creator-body { padding-left: 12px; padding-right: 12px; }
@@ -1072,17 +1091,23 @@
             .brand-name { font-size: 16px; }
             .workspace { flex-direction: column; }
             .creator { width: 100%; flex: 0 0 auto; border-right: 0; border-bottom: 1px solid var(--line); }
-            .creator-heading { padding: 14px 16px 10px; }
-            .creator-body { overflow: visible; padding: 0 16px 5px; }
-            .mode-switch { width: 100%; max-width: none; margin-bottom: 12px; }
-            .creator-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 0 12px; }
+            .creator-heading { padding: 12px 14px 6px; }
+            .creator-body { overflow: visible; padding: 0 14px 6px; gap: 8px; }
+            .mode-switch { width: 100%; max-width: none; margin-bottom: 2px; }
+            .mode-btn { min-height: 38px; font-size: 13px; }
+            .creator-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 2px; }
             .model-group { grid-column: 1 / -1; }
-            .reference-zone { min-height: 62px; }
-            .reference-grid { grid-template-columns: repeat(3, 73px); }
-            .reference-tile { height: 63px; }
-            .main-prompt { min-height: 110px; font-size: 16px; }
-            .creator-footer { padding: 10px 16px 15px; border-top: 0; }
-            .generate-btn { min-height: 44px; }
+            .combo-trigger { min-height: 40px; padding: 7px 10px; font-size: 13px; }
+            .reference-zone { min-height: 52px; padding: 9px 12px; }
+            .reference-zone strong { font-size: 12px; }
+            .reference-zone small { font-size: 10.5px; }
+            .reference-grid { grid-template-columns: repeat(3, 76px); }
+            .reference-tile { height: 60px; }
+            .prompt-group { flex: 0 0 auto; min-height: auto; }
+            .prompt-shell { flex: 0 0 auto; min-height: auto; }
+            .main-prompt { min-height: 100px; height: auto; font-size: 14.5px; padding: 9px 11px; }
+            .creator-footer { padding: 8px 14px 14px; border-top: 0; }
+            .generate-btn { min-height: 46px; font-size: 14.5px; }
             .main { min-height: 420px; overflow: visible; }
             .tabs {
                 position: sticky;
@@ -1350,6 +1375,25 @@
                     </button>
                 </div>
 
+                <div class="control-group reference-group" id="referenceControlGroup">
+                    <div class="field-label">
+                        <span>Referans görseller</span>
+                        <span id="uploadCount" class="mono">0 / 3</span>
+                    </div>
+                    <div id="referenceArea">
+                        <div class="reference-zone" id="dropzone" role="button" tabindex="0"
+                             aria-label="Referans görsel yükle">
+                            <svg class="icon"><use href="#i-upload"/></svg>
+                            <div>
+                                <strong>Görsel ekle veya sürükle</strong>
+                                <small>JPG, PNG, WEBP · En fazla 3</small>
+                            </div>
+                        </div>
+                        <div class="reference-grid" id="uploadPreviews" hidden></div>
+                    </div>
+                    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+                </div>
+
                 <div class="creator-settings">
                     <div class="control-group model-group">
                         <div class="field-label" id="modelLabel">Model</div>
@@ -1372,26 +1416,7 @@
                     </div>
                 </div>
 
-                <div class="control-group">
-                    <div class="field-label">
-                        <span>Referans görseller</span>
-                        <span id="uploadCount" class="mono">0 / 3</span>
-                    </div>
-                    <div id="referenceArea">
-                        <div class="reference-zone" id="dropzone" role="button" tabindex="0"
-                             aria-label="Referans görsel yükle">
-                            <svg class="icon"><use href="#i-upload"/></svg>
-                            <div>
-                                <strong>Görsel ekle veya sürükle</strong>
-                                <small>JPG, PNG, WEBP · En fazla 3</small>
-                            </div>
-                        </div>
-                        <div class="reference-grid" id="uploadPreviews" hidden></div>
-                    </div>
-                    <input type="file" id="fileInput" accept="image/*" multiple hidden>
-                </div>
-
-                <div class="control-group" style="margin-bottom:0">
+                <div class="control-group prompt-group">
                     <label class="field-label" for="promptInput">
                         <span>Prompt</span>
                         <span id="promptTypeLabel" class="eyebrow">Image</span>
@@ -1672,7 +1697,8 @@
             throw error;
         }
 
-        if (!response.ok || data?.error || data?.success === false) {
+        const isPollOrActive = typeof path === 'string' && (path.includes('/poll/') || path.includes('/active'));
+        if (!response.ok || (!isPollOrActive && (data?.error || data?.success === false))) {
             const error = new Error(data?.error || data?.message || `İstek başarısız (${response.status}).`);
             error.status = response.status;
             throw error;
@@ -1851,7 +1877,7 @@
             let filtered = [...this.items];
             let focusIndex = Math.max(0, filtered.findIndex(item => item.value === this.value));
 
-            currentCombo = { owner: this, menu };
+            currentCombo = { owner: this, menu, openedAt: Date.now() };
             this.button.setAttribute('aria-expanded', 'true');
             this.button.setAttribute('aria-controls', 'studioOptions');
 
@@ -1961,11 +1987,18 @@
 
             renderOptions();
             position();
-            (input || list).focus({ preventScroll: true });
+            currentCombo.position = position;
+
+            const isTouch = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
+            if (!isTouch && input) {
+                input.focus({ preventScroll: true });
+            } else {
+                list.focus({ preventScroll: true });
+            }
         }
     }
 
-        function closeCombo(returnFocus = false) {
+    function closeCombo(returnFocus = false) {
         if (!currentCombo) return;
         const { owner, menu } = currentCombo;
         menu.remove();
@@ -1984,11 +2017,28 @@
         closeCombo();
     });
 
-    window.addEventListener('resize', () => closeCombo());
+    let lastWinWidth = window.innerWidth;
+    window.addEventListener('resize', () => {
+        if (!currentCombo) return;
+        if (Math.abs(window.innerWidth - lastWinWidth) > 8) {
+            lastWinWidth = window.innerWidth;
+            closeCombo();
+        } else {
+            currentCombo.position?.();
+        }
+    });
 
     document.addEventListener('scroll', event => {
         if (!currentCombo) return;
         if (currentCombo.menu.contains(event.target)) return;
+        if (currentCombo.menu.contains(document.activeElement)) {
+            currentCombo.position?.();
+            return;
+        }
+        if (Date.now() - (currentCombo.openedAt || 0) < 450) {
+            currentCombo.position?.();
+            return;
+        }
         closeCombo();
     }, true);
 
@@ -2966,6 +3016,18 @@
                 });
 
                 if (job.status === 'completed') job.pct = 100;
+
+                if (job.status === 'failed' && !job.error) {
+                    job.error = 'Üretim sunucu tarafında başarısız oldu.';
+                }
+
+                if (job.error && !job.logs.some(entry => (typeof entry === 'string' ? entry : entry.message) === job.error)) {
+                    job.logs.push({
+                        status: 'error',
+                        message: job.error,
+                        time: getCurrentTimeStr()
+                    });
+                }
 
                 updateJobCard(job);
                 updateJobsSummary();
