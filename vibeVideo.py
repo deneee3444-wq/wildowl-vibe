@@ -180,32 +180,58 @@ def _extract_html(payload: dict) -> str:
 
 
 def wait_for_verify_link(service, after_ts: int, timeout: int = 180, poll: int = 5, log_callback=None) -> str:
-    """VibeVideo'dan gelen en yeni maildeki İLK <a href="..."> linkini döndür."""
+    """VibeVideo'dan gelen en yeni maildeki doğrulama linkini döndür."""
     query = f'from:{SENDER_MATCH} after:{after_ts}'
     waited = 0
     msg_str = f"⏳ Mail bekleniyor (query: {query})"
     print(msg_str)
-    if log_callback: log_callback(msg_str, "registering", 38)
+    if log_callback:
+        log_callback(msg_str, "registering", 38)
+
     while waited < timeout:
         res = service.users().messages().list(
             userId="me", q=query, maxResults=5
         ).execute()
+
         msgs = res.get("messages", [])
+
         if msgs:
-            latest_id = msgs[0]["id"]  # list en yeniden eskiye sıralı
+            latest_id = msgs[0]["id"]
             msg = service.users().messages().get(
                 userId="me", id=latest_id, format="full"
             ).execute()
+
             html = _extract_html(msg["payload"])
-            m = re.search(r'href=["\'](https?://[^"\']+)["\']', html, re.IGNORECASE)
+
+            # Quoted-printable encoding'i düzelt
+            html = html.replace("=3D", "=")
+            html = html.replace("=\r\n", "")
+            html = html.replace("=\n", "")
+
+            # Direkt VibeVideo doğrulama linkini bul
+            m = re.search(
+                r'https://vibevideo\.org/api/auth/verify-email\?token=[^"\s<]+',
+                html,
+                re.IGNORECASE
+            )
+
             if m:
-                return html_mod.unescape(m.group(1))  # &amp; → &
-            print("⚠ Mail bulundu ama href çıkarılamadı, tekrar denenecek.")
+                return html_mod.unescape(m.group(0))
+
+            print("⚠ Mail bulundu ama doğrulama linki çıkarılamadı, tekrar denenecek.")
+
         time.sleep(poll)
         waited += poll
+
         if log_callback and waited % 15 == 0:
-            log_callback(f"Mail bekleniyor... ({waited}s)", "registering", 38 + min(10, waited // 15))
+            log_callback(
+                f"Mail bekleniyor... ({waited}s)",
+                "registering",
+                38 + min(10, waited // 15)
+            )
+
         print(f"  … {waited}s")
+
     raise TimeoutError("Doğrulama maili zamanında gelmedi.")
 
 
