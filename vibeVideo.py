@@ -197,7 +197,7 @@ def wait_for_verify_link(service, after_ts: int, timeout: int = 180, poll: int =
                 userId="me", id=latest_id, format="full"
             ).execute()
             html = _extract_html(msg["payload"])
-            m = re.search(r'href=["\']([^"\']+)["\']', html, re.IGNORECASE)
+            m = re.search(r'href=["\'](https?://[^"\']+)["\']', html, re.IGNORECASE)
             if m:
                 return html_mod.unescape(m.group(1))  # &amp; → &
             print("⚠ Mail bulundu ama href çıkarılamadı, tekrar denenecek.")
