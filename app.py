@@ -42,6 +42,11 @@ try:
 except ImportError:
     morphStudioAI = None
 
+try:
+    import agnesAI
+except ImportError:
+    agnesAI = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -70,7 +75,55 @@ except ImportError:
             "tier_labels": {"5": "5 Saniye", "10": "10 Saniye", "15": "15 Saniye"},
             "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
             "resolutions": ["720p", "1080p"],
-            "resolution": "720p"
+            "resolution": "720p",
+            "extra_settings": {
+                "enable_safety_checker": False,
+                "enable_prompt_expansion": False,
+                "multi_shots": False,
+                "camerafixed": False,
+                "loop": False,
+                "auto_fix": True,
+                "generate_audio": True,
+                "movement_amplitude": "auto",
+                "movement_amplitudes": ["auto", "low", "medium", "high"],
+                "movement_amplitude_labels": {
+                    "auto": "Otomatik",
+                    "low": "Düşük",
+                    "medium": "Orta",
+                    "high": "Yüksek"
+                }
+            }
+        },
+        "Agnes Video 2.0": {
+            "model_id": "agnes-video-v2.0",
+            "type": "video",
+            "provider": "agnes",
+            "tiers": ["3", "5", "8", "10", "15", "20", "30", "40"],
+            "tier_labels": {
+                "3": "3 Saniye",
+                "5": "5 Saniye",
+                "8": "8 Saniye",
+                "10": "10 Saniye",
+                "15": "15 Saniye",
+                "20": "20 Saniye",
+                "30": "30 Saniye",
+                "40": "40 Saniye"
+            },
+            "aspect_ratios": ["16:9", "9:16", "1:1"],
+            "resolutions": ["480p", "720p", "1080p"],
+            "resolution": "720p",
+            "extra_settings": {
+                "fps": 24,
+                "fps_options": [24, 30, 60],
+                "fps_labels": {
+                    "24": "24 FPS (Sinema)",
+                    "30": "30 FPS (Akıcı)",
+                    "60": "60 FPS (Ultra)"
+                },
+                "enable_prompt_expansion": False,
+                "negative_prompt": "",
+                "seed": ""
+            }
         },
         "Seedance 1.0 Pro Fast": {
             "model_id": "seedance_v1_pro_fast",
@@ -169,6 +222,33 @@ except ImportError:
             "tiers": ["standard"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
             "resolution": "HD"
+        },
+        "Agnes Image 2.5 Flash": {
+            "model_id": "agnes-image-2.5-flash",
+            "type": "image",
+            "provider": "agnes",
+            "tiers": ["standard"],
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "resolutions": ["1K", "2K", "3K", "4K"],
+            "resolution": "2K"
+        },
+        "Agnes Image 2.1 Flash": {
+            "model_id": "agnes-image-2.1-flash",
+            "type": "image",
+            "provider": "agnes",
+            "tiers": ["standard"],
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "resolutions": ["1K", "2K", "3K", "4K"],
+            "resolution": "2K"
+        },
+        "Agnes Image 2.0 Flash": {
+            "model_id": "agnes-image-2.0-flash",
+            "type": "image",
+            "provider": "agnes",
+            "tiers": ["standard"],
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "resolutions": ["1K", "2K", "3K", "4K"],
+            "resolution": "2K"
         }
     }
     
@@ -495,7 +575,7 @@ def start_generation():
     
     # Store image file contents in memory (RAM) instead of disk
     memory_images = []
-    file_keys = ['image_1', 'image_2', 'image_3']
+    file_keys = ['image_1', 'image_2', 'image_3', 'image_4', 'image_5', 'image_6']
     for idx, key in enumerate(file_keys):
         if key in request.files:
             file = request.files[key]
@@ -508,6 +588,29 @@ def start_generation():
                         'content_type': file.content_type or 'image/jpeg'
                     })
                 
+    # WAN 2.6 Extra parameters from request or model config defaults
+    extra_cfg = MODELS_CONFIG.get(model, {}).get("extra_settings", {})
+    wan_params = {
+        'enable_safety_checker': request.form.get('enable_safety_checker', str(extra_cfg.get('enable_safety_checker', False))).lower() == 'true',
+        'enable_prompt_expansion': request.form.get('enable_prompt_expansion', str(extra_cfg.get('enable_prompt_expansion', False))).lower() == 'true',
+        'multi_shots': request.form.get('multi_shots', str(extra_cfg.get('multi_shots', False))).lower() == 'true',
+        'camerafixed': request.form.get('camerafixed', str(extra_cfg.get('camerafixed', False))).lower() == 'true',
+        'loop': request.form.get('loop', str(extra_cfg.get('loop', False))).lower() == 'true',
+        'auto_fix': request.form.get('auto_fix', str(extra_cfg.get('auto_fix', True))).lower() == 'true',
+        'generate_audio': request.form.get('generate_audio', str(extra_cfg.get('generate_audio', True))).lower() == 'true',
+        'movement_amplitude': request.form.get('movement_amplitude', extra_cfg.get('movement_amplitude', 'auto')),
+        'seed': request.form.get('seed')
+    }
+
+    # Agnes Extra parameters from request or model config defaults
+    agnes_extra_cfg = MODELS_CONFIG.get(model, {}).get("extra_settings", {})
+    agnes_params = {
+        'fps': int(request.form.get('agnes_fps', agnes_extra_cfg.get('fps', 24))),
+        'enable_prompt_expansion': request.form.get('agnes_expand', str(agnes_extra_cfg.get('enable_prompt_expansion', False))).lower() == 'true',
+        'negative_prompt': request.form.get('agnes_negative', agnes_extra_cfg.get('negative_prompt', '')),
+        'seed': request.form.get('agnes_seed', request.form.get('seed'))
+    }
+
     # Store parameters & files directly in RAM dict
     ACTIVE_JOBS[job_id] = {
         'prompt': prompt,
@@ -517,6 +620,8 @@ def start_generation():
         'resolution': resolution,
         'num_images': num_images,
         'images': memory_images,
+        'wan_params': wan_params,
+        'agnes_params': agnes_params,
         'created_at': time.time(),
         'status': 'registering',
         'pct': 0,
@@ -856,13 +961,23 @@ def run_job_in_background(job_id):
                 # aspect_ratio ("16:9", "9:16", "1:1", "4:3", "3:4")
                 ar_choice = aspect_ratio or "16:9"
 
+                wan_p = job.get('wan_params') or {}
                 res = topVidAI.run_once(
                     prompt=prompt,
                     image_path=temp_img_path,
                     aspect_ratio=ar_choice,
                     duration=duration,
                     resolution=res_choice,
-                    log_callback=add_log
+                    log_callback=add_log,
+                    enable_safety_checker=wan_p.get('enable_safety_checker', False),
+                    enable_prompt_expansion=wan_p.get('enable_prompt_expansion', False),
+                    multi_shots=wan_p.get('multi_shots', False),
+                    camerafixed=wan_p.get('camerafixed', False),
+                    loop=wan_p.get('loop', False),
+                    auto_fix=wan_p.get('auto_fix', True),
+                    movement_amplitude=wan_p.get('movement_amplitude', 'auto'),
+                    generate_audio=wan_p.get('generate_audio', True),
+                    seed=wan_p.get('seed')
                 )
                 output_url = res.get("output")
                 if output_url:
@@ -1028,6 +1143,147 @@ def run_job_in_background(job_id):
                     if job_id in ACTIVE_JOBS:
                         ACTIVE_JOBS[job_id]['status'] = 'failed'
                         ACTIVE_JOBS[job_id]['error'] = str(m_err)
+                finally:
+                    for p in temp_img_paths:
+                        if os.path.exists(p):
+                            try:
+                                os.remove(p)
+                            except Exception:
+                                pass
+                return
+
+        # AGNES AI HANDLER (Agnes Video 2.0 & Agnes Image Modelleri)
+        if model_name.startswith("Agnes") or (MODELS_CONFIG.get(model_name, {}).get("provider") == "agnes"):
+            if not agnesAI:
+                add_log("Agnes AI modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'Agnes AI modülü bulunamadı.'
+                return
+
+            model_cfg = MODELS_CONFIG.get(model_name, {})
+            is_video = model_cfg.get("type") == "video"
+
+            if is_video:
+                add_log(f"Agnes AI ({model_name}) video motoru hazırlanıyor...", "registering", 5)
+                temp_img_paths = []
+                for idx, img_data in enumerate(images[:2]):
+                    ext = ".jpg"
+                    if "png" in img_data.get("content_type", "").lower():
+                        ext = ".png"
+                    temp_dir = os.path.join(ROOT_DIR, "scratch")
+                    os.makedirs(temp_dir, exist_ok=True)
+                    t_path = os.path.join(temp_dir, f"agnes_vid_ref_{job_id}_{idx}{ext}")
+                    with open(t_path, "wb") as f:
+                        f.write(img_data['content'])
+                    temp_img_paths.append(t_path)
+
+                try:
+                    duration_choice = tier if tier in ["3", "5", "8", "10", "15", "20", "30", "40"] else "5"
+                    res_choice = resolution if resolution in ["480p", "720p", "1080p"] else "720p"
+                    ar_choice = aspect_ratio or "16:9"
+
+                    agnes_p = job.get('agnes_params') or {}
+                    res = agnesAI.run_video(
+                        prompt=prompt,
+                        images=temp_img_paths,
+                        aspect_ratio=ar_choice,
+                        duration=duration_choice,
+                        resolution=res_choice,
+                        fps=int(agnes_p.get('fps', 24)),
+                        enable_prompt_expansion=bool(agnes_p.get('enable_prompt_expansion', False)),
+                        negative_prompt=agnes_p.get('negative_prompt', ""),
+                        seed=agnes_p.get('seed'),
+                        log_callback=add_log
+                    )
+                    output_url = res.get("output")
+                    if output_url:
+                        item = {
+                            'id': uuid.uuid4().hex,
+                            'url': output_url,
+                            'prompt': prompt,
+                            'model': model_name,
+                            'aspect_ratio': ar_choice,
+                            'tier': duration_choice,
+                            'resolution': res_choice,
+                            'type': "video",
+                            'task_id': res.get('task_id'),
+                            'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                        }
+                        GENERATION_HISTORY.insert(0, item)
+                        if job_id in ACTIVE_JOBS:
+                            ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                            ACTIVE_JOBS[job_id]['status'] = 'completed'
+                    else:
+                        raise RuntimeError("Agnes Video üretimi URL üretmedi.")
+                except Exception as a_err:
+                    add_log(f"Agnes Video Hatası: {str(a_err)}", "error", 90)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['status'] = 'failed'
+                        ACTIVE_JOBS[job_id]['error'] = str(a_err)
+                finally:
+                    for p in temp_img_paths:
+                        if os.path.exists(p):
+                            try:
+                                os.remove(p)
+                            except Exception:
+                                pass
+                return
+            else:
+                # Agnes Image Modelleri
+                add_log(f"Agnes AI ({model_name}) görsel motoru hazırlanıyor...", "registering", 5)
+                temp_img_paths = []
+                for idx, img_data in enumerate(images[:6]):
+                    ext = ".jpg"
+                    if "png" in img_data.get("content_type", "").lower():
+                        ext = ".png"
+                    temp_dir = os.path.join(ROOT_DIR, "scratch")
+                    os.makedirs(temp_dir, exist_ok=True)
+                    t_path = os.path.join(temp_dir, f"agnes_img_ref_{job_id}_{idx}{ext}")
+                    with open(t_path, "wb") as f:
+                        f.write(img_data['content'])
+                    temp_img_paths.append(t_path)
+
+                try:
+                    res_choice = resolution if resolution in ["1K", "2K", "3K", "4K"] else "2K"
+                    ar_choice = aspect_ratio or "1:1"
+                    model_id = model_cfg.get("model_id", "agnes-image-2.5-flash")
+
+                    agnes_p = job.get('agnes_params') or {}
+                    res = agnesAI.run_image(
+                        prompt=prompt,
+                        model=model_id,
+                        aspect_ratio=ar_choice,
+                        resolution=res_choice,
+                        negative_prompt=agnes_p.get('negative_prompt', ""),
+                        seed=agnes_p.get('seed'),
+                        images=temp_img_paths,
+                        log_callback=add_log
+                    )
+                    output_url = res.get("output")
+                    if output_url:
+                        item = {
+                            'id': uuid.uuid4().hex,
+                            'url': output_url,
+                            'prompt': prompt,
+                            'model': model_name,
+                            'aspect_ratio': ar_choice,
+                            'tier': tier or "standard",
+                            'resolution': res_choice,
+                            'type': "image",
+                            'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                        }
+                        GENERATION_HISTORY.insert(0, item)
+                        if job_id in ACTIVE_JOBS:
+                            ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                            ACTIVE_JOBS[job_id]['status'] = 'completed'
+                    else:
+                        raise RuntimeError("Agnes Görsel üretimi URL üretmedi.")
+                except Exception as a_err:
+                    add_log(f"Agnes Görsel Hatası: {str(a_err)}", "error", 90)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['status'] = 'failed'
+                        ACTIVE_JOBS[job_id]['error'] = str(a_err)
                 finally:
                     for p in temp_img_paths:
                         if os.path.exists(p):
