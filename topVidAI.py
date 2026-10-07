@@ -427,14 +427,23 @@ def run_once(
     aspect_ratio: str = "16:9",
     duration: str = "5",
     resolution: str = "720p",
-    log_callback=None
+    log_callback=None,
+    enable_safety_checker: bool = False,
+    enable_prompt_expansion: bool = False,
+    multi_shots: bool = False,
+    camerafixed: bool = False,
+    loop: bool = False,
+    auto_fix: bool = True,
+    movement_amplitude: str = "auto",
+    generate_audio: bool = True,
+    seed: int = None
 ) -> dict:
     """
     Wan 2.6 video üretim fonksiyonu.
     Görsel varsa Image-to-Video (tek kare, endframe yok), yoksa Text-to-Video çalışır.
-    Resimdeki tüm varsayılan ayarlar kod içinde sabitlenmiştir.
     Seçilen çözünürlük ve süreye göre gereken puanı (160, 240, 320, 480, 720) hesaplayıp
     her görev için o puana özel tek kullanımlık taze hesap açar.
+    Ekstra ayarlar (sansür, ses, hareket, prompt genişletme vb.) parametrik olarak aktarılır.
     """
     def _log(msg, status="info", pct=None):
         print(f"[TopVid Wan 2.6] {msg}")
@@ -463,31 +472,37 @@ def run_once(
 
     _log("Video parametreleri hazırlanıyor...", "uploading", 30)
 
-    # RESİMDEKİ AYARLARIN TAMAMI VARSAYILAN KOD İÇİNDE SABİTLENDİ:
+    try:
+        norm_seed = int(seed) if seed is not None and str(seed).strip() != "" and str(seed).strip().isdigit() else random.randint(1000, 999999)
+    except Exception:
+        norm_seed = random.randint(1000, 999999)
+
+    norm_movement = movement_amplitude if movement_amplitude in ["auto", "low", "medium", "high"] else "auto"
+
     payload = {
         "model_id": model_id,
         "prompt": prompt,
         "aspect_ratio": norm_ar,
         "duration": norm_dur,
         "resolution": norm_res,
-        "seed": random.randint(1000, 999999),
+        "seed": norm_seed,
         "is_public": 1,
-        # 1. Sansür Filtresi (Safety Checker): KAPALI (Sansürsüz)
-        "enable_safety_checker": False,
-        # 2. Prompt Expansion: KAPALI
-        "enable_prompt_expansion": True,
-        # 3. Multi-Shots: KAPALI
-        "multi_shots": False,
-        # 4. Sabit Kamera (Camera Fixed): KAPALI
-        "camerafixed": False,
-        # 5. Sonsuz Döngü (Seamless Loop): KAPALI
-        "loop": False,
-        # 6. Auto Fix: AÇIK (Titreme & Renk Düzeltme)
-        "auto_fix": False,
-        # 7. Hareket Şiddeti: Auto (Otomatik)
-        "movement_amplitude": "auto",
-        # 8. AI Ses Üretimi: AÇIK (Ortam Sesi / SFX)
-        "generate_audio": True
+        # 1. Sansür Filtresi (Safety Checker)
+        "enable_safety_checker": bool(enable_safety_checker),
+        # 2. Prompt Expansion
+        "enable_prompt_expansion": bool(enable_prompt_expansion),
+        # 3. Multi-Shots
+        "multi_shots": bool(multi_shots),
+        # 4. Sabit Kamera (Camera Fixed)
+        "camerafixed": bool(camerafixed),
+        # 5. Sonsuz Döngü (Seamless Loop)
+        "loop": bool(loop),
+        # 6. Auto Fix: Titreme & Renk Düzeltme
+        "auto_fix": bool(auto_fix),
+        # 7. Hareket Şiddeti: Auto / Low / Medium / High
+        "movement_amplitude": norm_movement,
+        # 8. AI Ses Üretimi
+        "generate_audio": bool(generate_audio)
     }
 
     # Image-to-Video ise görseli yükle (ENDFRAME YOK!)
