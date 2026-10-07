@@ -1520,14 +1520,14 @@
                                 <div class="adv-row">
                                     <span class="adv-row-label">Sansür Filtresi</span>
                                     <label class="adv-row-control switch-label">
-                                        <input type="checkbox" id="wanSafetyChecker" class="switch-input">
+                                        <input type="checkbox" id="wanSafetyChecker" class="switch-input" checked>
                                     </label>
                                 </div>
 
                                 <div class="adv-row">
                                     <span class="adv-row-label">Prompt Genişletme</span>
                                     <label class="adv-row-control switch-label">
-                                        <input type="checkbox" id="wanPromptExpansion" class="switch-input">
+                                        <input type="checkbox" id="wanPromptExpansion" class="switch-input" checked>
                                     </label>
                                 </div>
 
@@ -1555,7 +1555,7 @@
                                 <div class="adv-row">
                                     <span class="adv-row-label">Otomatik Düzeltme</span>
                                     <label class="adv-row-control switch-label">
-                                        <input type="checkbox" id="wanAutoFix" class="switch-input">
+                                        <input type="checkbox" id="wanAutoFix" class="switch-input" checked>
                                     </label>
                                 </div>
 
@@ -2071,19 +2071,12 @@
 
             const menu = document.createElement('div');
             menu.className = 'combo-menu';
-            const searchable = this.items.length > 5;
             menu.innerHTML = `
-                ${searchable ? `
-                    <div class="combo-search-wrap">
-                        ${icon('search')}
-                        <input class="combo-search" aria-label="Seçenek ara" placeholder="Ara..." autocomplete="off">
-                    </div>` : ''}
                 <div class="combo-options" role="listbox" tabindex="-1" id="studioOptions"></div>
             `;
             document.body.append(menu);
 
             const list = menu.querySelector('.combo-options');
-            const input = menu.querySelector('input');
             let filtered = [...this.items];
             let focusIndex = Math.max(0, filtered.findIndex(item => item.value === this.value));
 
@@ -2098,11 +2091,9 @@
                 const active = list.children[focusIndex];
                 if (active && filtered.length) {
                     list.setAttribute('aria-activedescendant', active.id);
-                    if (input) input.setAttribute('aria-activedescendant', active.id);
                     active.scrollIntoView({ block: 'nearest' });
                 } else {
                     list.removeAttribute('aria-activedescendant');
-                    input?.removeAttribute('aria-activedescendant');
                 }
             };
 
@@ -2159,7 +2150,7 @@
                 const above = rect.top - 12;
                 const upwards = below < 180 && above > below;
                 const room = Math.max(80, upwards ? above : below);
-                list.style.maxHeight = `${Math.max(40, Math.min(244, room - (searchable ? 56 : 16)))}px`;
+                list.style.maxHeight = `${Math.max(40, Math.min(244, room - 16))}px`;
 
                 const height = menu.offsetHeight;
                 menu.style.top = `${upwards ? Math.max(8, rect.top - height - 6) : rect.bottom + 6}px`;
@@ -2179,32 +2170,18 @@
                 } else if (event.key === 'Enter') {
                     event.preventDefault();
                     choose(focusIndex);
-                } else if (!input && (event.key === 'Home' || event.key === 'End')) {
+                } else if (event.key === 'Home' || event.key === 'End') {
                     event.preventDefault();
                     focusIndex = event.key === 'Home' ? 0 : filtered.length - 1;
                     focusOption();
                 }
             });
 
-            input?.addEventListener('input', () => {
-                const term = input.value.toLocaleLowerCase('tr');
-                filtered = this.items.filter(item =>
-                    `${item.label} ${item.detail || ''}`.toLocaleLowerCase('tr').includes(term));
-                focusIndex = 0;
-                renderOptions();
-                position();
-            });
-
             renderOptions();
             position();
             currentCombo.position = position;
 
-            const isTouch = window.matchMedia('(pointer: coarse)').matches || ('ontouchstart' in window);
-            if (!isTouch && input) {
-                input.focus({ preventScroll: true });
-            } else {
-                list.focus({ preventScroll: true });
-            }
+            list.focus({ preventScroll: true });
         }
     }
 
@@ -2445,14 +2422,6 @@
             $('wanAdvPanel').setAttribute('aria-hidden', 'true');
         } else if (config.extra_settings) {
             const extra = config.extra_settings;
-            $('wanSafetyChecker').checked = Boolean(extra.enable_safety_checker);
-            $('wanPromptExpansion').checked = Boolean(extra.enable_prompt_expansion);
-            $('wanMultiShots').checked = Boolean(extra.multi_shots);
-            $('wanCameraFixed').checked = Boolean(extra.camerafixed);
-            $('wanLoop').checked = Boolean(extra.loop);
-            $('wanAutoFix').checked = Boolean(extra.auto_fix);
-            $('wanGenerateAudio').checked = Boolean(extra.generate_audio);
-
             const amplitudes = Array.isArray(extra.movement_amplitudes)
                 ? extra.movement_amplitudes
                 : ['auto', 'low', 'medium', 'high'];
@@ -2461,9 +2430,7 @@
                 value: val,
                 label: labels[val] || val.toUpperCase()
             }));
-            selectedMovement = wanMovementCombo.setItems(items, extra.movement_amplitude || 'auto');
-
-            $('wanSeed').value = '';
+            selectedMovement = wanMovementCombo.setItems(items, selectedMovement || extra.movement_amplitude || 'auto');
         }
 
         // Agnes Video 2.0 advanced settings visibility and backend defaults
@@ -2474,10 +2441,6 @@
             $('agnesAdvPanel').setAttribute('aria-hidden', 'true');
         } else if (config.extra_settings) {
             const extra = config.extra_settings;
-            $('agnesPromptExpansion').checked = Boolean(extra.enable_prompt_expansion);
-            $('agnesNegative').value = extra.negative_prompt || '';
-            $('agnesSeed').value = '';
-
             const fpsOptions = Array.isArray(extra.fps_options)
                 ? extra.fps_options
                 : [24, 30, 60];
@@ -2486,7 +2449,7 @@
                 value: String(val),
                 label: fpsLabels[String(val)] || `${val} FPS`
             }));
-            selectedAgnesFps = agnesFpsCombo.setItems(items, String(extra.fps || '24'));
+            selectedAgnesFps = agnesFpsCombo.setItems(items, selectedAgnesFps || String(extra.fps || '24'));
         }
 
         $('generateBtn').disabled =
@@ -3515,7 +3478,7 @@
             $('generateIcon').classList.remove('spinner');
             $('generateIcon').innerHTML = '<use href="#i-spark"/>';
             $('generateBtn').setAttribute('aria-busy', 'false');
-            updateModelOptions();
+            $('generateBtn').disabled = !selectedRatio || !selectedTier;
         }
     }
 
