@@ -278,6 +278,89 @@
         .creator-settings .model-group { grid-column: 1 / -1; }
         .creator-settings #resolutionSection { grid-column: 1 / -1; }
 
+        /* WAN 2.6 Advanced Settings */
+        .adv-toggle {
+            cursor: pointer;
+            margin-bottom: 2px;
+        }
+        .adv-toggle .combo-value {
+            color: var(--text);
+        }
+        .adv-toggle-chevron {
+            transition: transform .2s ease;
+        }
+        .adv-toggle[aria-expanded="true"] .adv-toggle-chevron {
+            transform: rotate(180deg);
+        }
+
+        .adv-panel {
+            display: grid;
+            grid-template-rows: 0fr;
+            transition: grid-template-rows .25s ease;
+        }
+        .adv-panel[aria-hidden="false"] { grid-template-rows: 1fr; }
+        .adv-panel-inner {
+            overflow: hidden;
+        }
+        .adv-panel-content {
+            display: flex;
+            flex-direction: column;
+            gap: 6px;
+            padding-top: 8px;
+        }
+        .adv-row {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 8px;
+            padding: 7px 10px;
+            border-radius: 8px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+        }
+        .adv-row-label {
+            display: flex;
+            align-items: center;
+            gap: 7px;
+            font-size: 11px;
+            font-weight: 500;
+            color: var(--muted);
+            min-width: 0;
+        }
+        .adv-row-label .icon { width: 13px; height: 13px; color: var(--faint); flex: 0 0 auto; }
+        .adv-row-control { flex: 0 0 auto; }
+
+        .adv-seed {
+            width: 100%;
+            height: 38px;
+            min-height: 38px;
+            background: var(--surface-2);
+            border: 1px solid var(--line-strong);
+            border-radius: 9px;
+            color: var(--text);
+            font-size: 12.5px;
+            font-weight: 500;
+            padding: 8px 10px;
+            text-align: left;
+            transition: border-color .15s, box-shadow .15s, background .15s;
+            -moz-appearance: textfield;
+            appearance: textfield;
+        }
+        .adv-seed::-webkit-outer-spin-button,
+        .adv-seed::-webkit-inner-spin-button {
+            -webkit-appearance: none;
+            margin: 0;
+        }
+        .adv-seed:focus, .adv-seed:focus-visible {
+            outline: none !important;
+            border-color: #d8f58a80;
+            box-shadow: 0 0 0 3px #d8f58a20, 0 0 16px #d8f58a10;
+        }
+        .adv-seed::placeholder {
+            color: var(--faint);
+            text-align: left;
+        }
+
         .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
         /* Custom select trigger and floating option menu */
@@ -418,14 +501,14 @@
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
-            min-height: 100px;
+            min-height: 125px;
             margin-bottom: 0;
         }
         .prompt-shell {
             flex: 1 1 auto;
             display: flex;
             flex-direction: column;
-            min-height: 85px;
+            min-height: 105px;
             border: 1px solid var(--line-strong);
             border-radius: 10px;
             background: var(--bg);
@@ -437,8 +520,8 @@
             flex: 1 1 auto;
             display: block;
             width: 100%;
-            height: 100%;
-            min-height: 65px;
+            height: auto;
+            min-height: 55px;
             max-height: none;
             padding: 8px 10px;
             background: transparent;
@@ -450,7 +533,9 @@
         }
         .main-prompt::placeholder { color: var(--faint); }
         .prompt-footer {
-            padding: 4px 6px;
+            flex: 0 0 32px;
+            height: 32px;
+            padding: 3px 6px;
             display: flex;
             align-items: center;
             justify-content: space-between;
@@ -1095,9 +1180,10 @@
             .creator-body { overflow: visible; padding: 0 14px 6px; gap: 8px; }
             .mode-switch { width: 100%; max-width: none; margin-bottom: 2px; }
             .mode-btn { min-height: 38px; font-size: 13px; }
-            .creator-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 2px; }
+            .creator-settings, .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 2px; }
             .model-group { grid-column: 1 / -1; }
             .combo-trigger { min-height: 40px; padding: 7px 10px; font-size: 13px; }
+            .adv-seed { min-height: 40px; height: 40px; font-size: 13px; padding: 7px 10px; }
             .reference-zone { min-height: 52px; padding: 9px 12px; }
             .reference-zone strong { font-size: 12px; }
             .reference-zone small { font-size: 10.5px; }
@@ -1230,8 +1316,9 @@
             .tab .icon { width: 13px; height: 13px; }
             .tab .count { min-width: 16px; height: 15px; font-size: 9px; padding: 0 3px; }
             .prompt-list { grid-template-columns: 1fr; }
-            .creator-settings { gap: 0 9px; }
+            .creator-settings, .options-row { gap: 0 9px; }
             .combo-trigger { padding-left: 8px; padding-right: 8px; gap: 6px; }
+            .adv-seed { padding-left: 8px; padding-right: 8px; }
             .combo-leading { display: none; }
         }
 
@@ -1283,6 +1370,9 @@
     <symbol id="i-alert" viewBox="0 0 24 24"><path d="m12 3 10 18H2L12 3Z"/><path d="M12 9v5M12 17h.01"/></symbol>
     <symbol id="i-extend" viewBox="0 0 24 24"><path d="m3 5 8 7-8 7V5Zm10 0 8 7-8 7V5Z"/></symbol>
     <symbol id="i-eye" viewBox="0 0 24 24"><path d="M2 12s4-7 10-7 10 7 10 7-4 7-10 7S2 12 2 12Z"/><circle cx="12" cy="12" r="3"/></symbol>
+    <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
+    <symbol id="i-motion" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
+    <symbol id="i-film" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="2.18" ry="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
 </svg>
 
 {% if not logged_in %}
@@ -1416,7 +1506,127 @@
                     </div>
                 </div>
 
-                <div class="control-group prompt-group">
+                <!-- WAN 2.6 Video Ekstra Ayarlar -->
+                <div id="wanAdvancedSection" hidden>
+                    <button type="button" class="combo-trigger adv-toggle" id="wanAdvToggle" aria-expanded="false" aria-controls="wanAdvPanel">
+                        <span class="combo-leading"><svg class="icon"><use href="#i-sliders"/></svg></span>
+                        <span class="combo-value">Ekstra ayarlar</span>
+                        <svg class="icon combo-chevron adv-toggle-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+                    </button>
+                    <div class="adv-panel" id="wanAdvPanel" aria-hidden="true">
+                        <div class="adv-panel-inner">
+                            <div class="adv-panel-content">
+
+                                <div class="adv-row">
+                                    <span class="adv-row-label">Sansür Filtresi</span>
+                                    <label class="adv-row-control switch-label">
+                                        <input type="checkbox" id="wanSafetyChecker" class="switch-input">
+                                    </label>
+                                </div>
+
+                                <div class="adv-row">
+                                    <span class="adv-row-label">Prompt Genişletme</span>
+                                    <label class="adv-row-control switch-label">
+                                        <input type="checkbox" id="wanPromptExpansion" class="switch-input">
+                                    </label>
+                                </div>
+
+                                <div class="adv-row">
+                                    <span class="adv-row-label">Çoklu Sahne</span>
+                                    <label class="adv-row-control switch-label">
+                                        <input type="checkbox" id="wanMultiShots" class="switch-input">
+                                    </label>
+                                </div>
+
+                                <div class="adv-row">
+                                    <span class="adv-row-label">Sabit Kamera</span>
+                                    <label class="adv-row-control switch-label">
+                                        <input type="checkbox" id="wanCameraFixed" class="switch-input">
+                                    </label>
+                                </div>
+
+                                <div class="adv-row">
+                                    <span class="adv-row-label">Sonsuz Döngü</span>
+                                    <label class="adv-row-control switch-label">
+                                        <input type="checkbox" id="wanLoop" class="switch-input">
+                                    </label>
+                                </div>
+
+                                <div class="adv-row">
+                                    <span class="adv-row-label">Otomatik Düzeltme</span>
+                                    <label class="adv-row-control switch-label">
+                                        <input type="checkbox" id="wanAutoFix" class="switch-input">
+                                    </label>
+                                </div>
+
+                                <div class="adv-row">
+                                    <span class="adv-row-label">AI Ses Üretimi</span>
+                                    <label class="adv-row-control switch-label">
+                                        <input type="checkbox" id="wanGenerateAudio" class="switch-input">
+                                    </label>
+                                </div>
+
+                                <div class="options-row" style="margin-top: 4px;">
+                                    <div class="control-group">
+                                        <div class="field-label" id="wanMovementLabel">Hareket Şiddeti</div>
+                                        <div class="combo" id="wanMovementCombo"></div>
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label class="field-label" for="wanSeed">Seed</label>
+                                        <input type="number" id="wanSeed" class="adv-seed" placeholder="Rastgele" min="1" max="999999" inputmode="numeric">
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agnes Video 2.0 Ekstra Ayarlar -->
+                <div id="agnesAdvancedSection" hidden>
+                    <button type="button" class="combo-trigger adv-toggle" id="agnesAdvToggle" aria-expanded="false" aria-controls="agnesAdvPanel">
+                        <span class="combo-leading"><svg class="icon"><use href="#i-sliders"/></svg></span>
+                        <span class="combo-value">Ekstra ayarlar</span>
+                        <svg class="icon combo-chevron adv-toggle-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+                    </button>
+                    <div class="adv-panel" id="agnesAdvPanel" aria-hidden="true">
+                        <div class="adv-panel-inner">
+                            <div class="adv-panel-content">
+
+                                <div class="options-row">
+                                    <div class="control-group">
+                                        <div class="field-label" id="agnesFpsLabel">Kare Hızı (FPS)</div>
+                                        <div class="combo" id="agnesFpsCombo"></div>
+                                    </div>
+
+                                    <div class="control-group">
+                                        <div class="field-label">Prompt Genişletme</div>
+                                        <label class="combo-trigger" style="cursor: pointer; justify-content: space-between; padding-right: 8px;">
+                                            <span class="combo-value" style="font-size: 12px; color: var(--muted);">Otomatik</span>
+                                            <input type="checkbox" id="agnesPromptExpansion" class="switch-input" style="flex: 0 0 auto;">
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="options-row" style="margin-top: 4px;">
+                                    <div class="control-group">
+                                        <label class="field-label" for="agnesSeed">Seed</label>
+                                        <input type="number" id="agnesSeed" class="adv-seed" placeholder="Rastgele" min="0" max="999999" inputmode="numeric">
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label class="field-label" for="agnesNegative">Negatif Prompt</label>
+                                        <input type="text" id="agnesNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık...">
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="control-group prompt-group" id="promptGroup">
                     <label class="field-label" for="promptInput">
                         <span>Prompt</span>
                         <span id="promptTypeLabel" class="eyebrow">Image</span>
@@ -2096,7 +2306,8 @@
         return normalized === 'vibe video' ||
             normalized === 'pop vid' ||
             normalized === 'wan 2.6 video' ||
-            normalized.includes('seedance');
+            normalized.includes('seedance') ||
+            normalized.includes('agnes video');
     }
 
     function isVideoOutput(url, model, explicitType = '') {
@@ -2156,6 +2367,24 @@
         value => { selectedResolution = value; }
     );
 
+    let selectedMovement = 'auto';
+
+    const wanMovementCombo = new StudioCombo(
+        'wanMovementCombo',
+        'wanMovementLabel',
+        'motion',
+        value => { selectedMovement = value; }
+    );
+
+    let selectedAgnesFps = '24';
+
+    const agnesFpsCombo = new StudioCombo(
+        'agnesFpsCombo',
+        'agnesFpsLabel',
+        'film',
+        value => { selectedAgnesFps = value; }
+    );
+
     function stringOptions(values) {
         return Array.isArray(values)
             ? values.map(value => String(value))
@@ -2206,6 +2435,59 @@
             : 'Görsel oluştur';
 
         $('promptTypeLabel').textContent = video ? 'Video' : 'Image';
+
+        // WAN 2.6 advanced settings visibility and backend defaults
+        const isWan26 = selectedModel === 'Wan 2.6 Video';
+        $('wanAdvancedSection').hidden = !isWan26;
+        if (!isWan26) {
+            // Collapse panel when switching away
+            $('wanAdvToggle').setAttribute('aria-expanded', 'false');
+            $('wanAdvPanel').setAttribute('aria-hidden', 'true');
+        } else if (config.extra_settings) {
+            const extra = config.extra_settings;
+            $('wanSafetyChecker').checked = Boolean(extra.enable_safety_checker);
+            $('wanPromptExpansion').checked = Boolean(extra.enable_prompt_expansion);
+            $('wanMultiShots').checked = Boolean(extra.multi_shots);
+            $('wanCameraFixed').checked = Boolean(extra.camerafixed);
+            $('wanLoop').checked = Boolean(extra.loop);
+            $('wanAutoFix').checked = Boolean(extra.auto_fix);
+            $('wanGenerateAudio').checked = Boolean(extra.generate_audio);
+
+            const amplitudes = Array.isArray(extra.movement_amplitudes)
+                ? extra.movement_amplitudes
+                : ['auto', 'low', 'medium', 'high'];
+            const labels = extra.movement_amplitude_labels || {};
+            const items = amplitudes.map(val => ({
+                value: val,
+                label: labels[val] || val.toUpperCase()
+            }));
+            selectedMovement = wanMovementCombo.setItems(items, extra.movement_amplitude || 'auto');
+
+            $('wanSeed').value = '';
+        }
+
+        // Agnes Video 2.0 advanced settings visibility and backend defaults
+        const isAgnesVideo = selectedModel === 'Agnes Video 2.0';
+        $('agnesAdvancedSection').hidden = !isAgnesVideo;
+        if (!isAgnesVideo) {
+            $('agnesAdvToggle').setAttribute('aria-expanded', 'false');
+            $('agnesAdvPanel').setAttribute('aria-hidden', 'true');
+        } else if (config.extra_settings) {
+            const extra = config.extra_settings;
+            $('agnesPromptExpansion').checked = Boolean(extra.enable_prompt_expansion);
+            $('agnesNegative').value = extra.negative_prompt || '';
+            $('agnesSeed').value = '';
+
+            const fpsOptions = Array.isArray(extra.fps_options)
+                ? extra.fps_options
+                : [24, 30, 60];
+            const fpsLabels = extra.fps_labels || {};
+            const items = fpsOptions.map(val => ({
+                value: String(val),
+                label: fpsLabels[String(val)] || `${val} FPS`
+            }));
+            selectedAgnesFps = agnesFpsCombo.setItems(items, String(extra.fps || '24'));
+        }
 
         $('generateBtn').disabled =
             generationBusy || !selectedRatio || !selectedTier;
@@ -3164,6 +3446,33 @@
                 form.append('resolution', snapshot.resolution);
             }
 
+            if (snapshot.model === 'Wan 2.6 Video') {
+                form.append('enable_safety_checker', $('wanSafetyChecker').checked ? 'true' : 'false');
+                form.append('enable_prompt_expansion', $('wanPromptExpansion').checked ? 'true' : 'false');
+                form.append('multi_shots', $('wanMultiShots').checked ? 'true' : 'false');
+                form.append('camerafixed', $('wanCameraFixed').checked ? 'true' : 'false');
+                form.append('loop', $('wanLoop').checked ? 'true' : 'false');
+                form.append('auto_fix', $('wanAutoFix').checked ? 'true' : 'false');
+                form.append('generate_audio', $('wanGenerateAudio').checked ? 'true' : 'false');
+                form.append('movement_amplitude', selectedMovement || 'auto');
+                if ($('wanSeed') && $('wanSeed').value.trim()) {
+                    form.append('seed', $('wanSeed').value.trim());
+                }
+            } else if (snapshot.model === 'Agnes Video 2.0') {
+                form.append('agnes_fps', selectedAgnesFps || '24');
+                form.append('agnes_expand', $('agnesPromptExpansion').checked ? 'true' : 'false');
+                if ($('agnesNegative') && $('agnesNegative').value.trim()) {
+                    form.append('agnes_negative', $('agnesNegative').value.trim());
+                }
+                if ($('agnesSeed') && $('agnesSeed').value.trim()) {
+                    form.append('agnes_seed', $('agnesSeed').value.trim());
+                }
+            } else if (snapshot.model.startsWith('Agnes Image')) {
+                if ($('agnesNegative') && $('agnesNegative').value.trim()) {
+                    form.append('agnes_negative', $('agnesNegative').value.trim());
+                }
+            }
+
             snapshot.files.forEach((file, index) => {
                 form.append(`image_${index + 1}`, file);
             });
@@ -3209,6 +3518,18 @@
             updateModelOptions();
         }
     }
+
+    $('wanAdvToggle')?.addEventListener('click', () => {
+        const isExpanded = $('wanAdvToggle').getAttribute('aria-expanded') === 'true';
+        $('wanAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
+        $('wanAdvPanel').setAttribute('aria-hidden', String(isExpanded));
+    });
+
+    $('agnesAdvToggle')?.addEventListener('click', () => {
+        const isExpanded = $('agnesAdvToggle').getAttribute('aria-expanded') === 'true';
+        $('agnesAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
+        $('agnesAdvPanel').setAttribute('aria-hidden', String(isExpanded));
+    });
 
     $('generateBtn').addEventListener('click', triggerGeneration);
 
