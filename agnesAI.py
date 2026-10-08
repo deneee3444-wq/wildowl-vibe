@@ -167,6 +167,36 @@ def expand_video_prompt(prompt: str) -> str:
     return prompt
 
 
+def expand_image_prompt(prompt: str) -> str:
+    """Agnes 2.0 Flash kullanarak resim promptunu detaylı İngilizceye genişletir."""
+    if not prompt or len(prompt.strip()) < 3:
+        return prompt
+    try:
+        sys_msg = (
+            "You are an expert digital artist and visual designer. Expand the user's short prompt into a detailed, "
+            "vivid, high-quality image generation prompt in English. Include subject details, lighting, mood, artistic style, "
+            "and texture. Respond ONLY with the expanded prompt text, without explanations or quotes."
+        )
+        payload = {
+            "model": "agnes-2.0-flash",
+            "messages": [
+                {"role": "system", "content": sys_msg},
+                {"role": "user", "content": prompt}
+            ],
+            "temperature": 0.7,
+            "max_tokens": 500
+        }
+        res = _request("POST", "/chat/completions", json_body=payload, timeout=30).json()
+        choices = res.get("choices") or []
+        if choices:
+            expanded = choices[0].get("message", {}).get("content", "").strip()
+            if expanded:
+                return expanded
+    except Exception:
+        pass
+    return prompt
+
+
 def snap_frames(target: int, max_frames: int = 961) -> int:
     valid = [f for f in ALLOWED_FRAMES if f <= max_frames]
     if not valid:
@@ -388,6 +418,7 @@ def run_image(
     seed: int | str | None = None,
     images: list[str | bytes] | None = None,
     strength: float = 0.75,
+    enable_prompt_expansion: bool = False,
     log_callback: Callable[[str, str, int], None] | None = None
 ) -> dict:
     """
@@ -399,9 +430,15 @@ def run_image(
     if log_callback:
         log_callback(f"Agnes Resim motoru ({model}) hazırlanıyor...", "registering", 10)
 
+    final_prompt = prompt.strip()
+    if enable_prompt_expansion:
+        if log_callback:
+            log_callback("Agnes 2.0 Flash ile prompt genişletiliyor...", "registering", 15)
+        final_prompt = expand_image_prompt(final_prompt)
+
     payload: dict[str, Any] = {
         "model": model,
-        "prompt": prompt.strip(),
+        "prompt": final_prompt,
         "size": resolution.upper() if resolution else "2K",
         "ratio": aspect_ratio or "1:1",
         "extra_body": {"response_format": "url"}
@@ -414,8 +451,9 @@ def run_image(
     if seed is not None and str(seed).strip() != "":
         try:
             s_val = int(seed)
-            if 0 <= s_val <= 999:
+            if 0 <= s_val:
                 payload["seed"] = s_val
+                payload["extra_body"]["seed"] = s_val
         except Exception:
             pass
 
@@ -426,6 +464,7 @@ def run_image(
         payload["image"] = valid_refs
         payload["extra_body"]["image"] = valid_refs
         payload["strength"] = max(0.1, min(1.0, float(strength or 0.75)))
+        payload["extra_body"]["strength"] = max(0.1, min(1.0, float(strength or 0.75)))
         if log_callback:
             log_callback(f"{len(valid_refs)} referans görsel dahil ediliyor...", "registering", 20)
 
