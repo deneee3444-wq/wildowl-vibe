@@ -1373,6 +1373,7 @@
     <symbol id="i-sliders" viewBox="0 0 24 24"><path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/></symbol>
     <symbol id="i-motion" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
     <symbol id="i-film" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="2.18" ry="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
+    <symbol id="i-blend" viewBox="0 0 24 24"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
 </svg>
 
 {% if not logged_in %}
@@ -1618,6 +1619,49 @@
                                     <div class="control-group">
                                         <label class="field-label" for="agnesNegative">Negatif Prompt</label>
                                         <input type="text" id="agnesNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık...">
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Agnes Image Ekstra Ayarlar -->
+                <div id="agnesImgAdvancedSection" hidden>
+                    <button type="button" class="combo-trigger adv-toggle" id="agnesImgAdvToggle" aria-expanded="false" aria-controls="agnesImgAdvPanel">
+                        <span class="combo-leading"><svg class="icon"><use href="#i-sliders"/></svg></span>
+                        <span class="combo-value">Ekstra ayarlar</span>
+                        <svg class="icon combo-chevron adv-toggle-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+                    </button>
+                    <div class="adv-panel" id="agnesImgAdvPanel" aria-hidden="true">
+                        <div class="adv-panel-inner">
+                            <div class="adv-panel-content">
+
+                                <div class="options-row">
+                                    <div class="control-group">
+                                        <div class="field-label" id="agnesImgStrengthLabel">Referans Gücü</div>
+                                        <div class="combo" id="agnesImgStrengthCombo"></div>
+                                    </div>
+
+                                    <div class="control-group">
+                                        <div class="field-label">Prompt Genişletme</div>
+                                        <label class="combo-trigger" style="cursor: pointer; justify-content: space-between; padding-right: 8px;">
+                                            <span class="combo-value" style="font-size: 12px; color: var(--muted);">Otomatik</span>
+                                            <input type="checkbox" id="agnesImgPromptExpansion" class="switch-input" style="flex: 0 0 auto;">
+                                        </label>
+                                    </div>
+                                </div>
+
+                                <div class="options-row" style="margin-top: 4px;">
+                                    <div class="control-group">
+                                        <label class="field-label" for="agnesImgSeed">Seed</label>
+                                        <input type="number" id="agnesImgSeed" class="adv-seed" placeholder="Rastgele" min="0" max="999999" inputmode="numeric">
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label class="field-label" for="agnesImgNegative">Negatif Prompt</label>
+                                        <input type="text" id="agnesImgNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık...">
                                     </div>
                                 </div>
 
@@ -2362,6 +2406,15 @@
         value => { selectedAgnesFps = value; }
     );
 
+    let selectedAgnesImgStrength = '0.75';
+
+    const agnesImgStrengthCombo = new StudioCombo(
+        'agnesImgStrengthCombo',
+        'agnesImgStrengthLabel',
+        'blend',
+        value => { selectedAgnesImgStrength = value; }
+    );
+
     function stringOptions(values) {
         return Array.isArray(values)
             ? values.map(value => String(value))
@@ -2450,6 +2503,25 @@
                 label: fpsLabels[String(val)] || `${val} FPS`
             }));
             selectedAgnesFps = agnesFpsCombo.setItems(items, selectedAgnesFps || String(extra.fps || '24'));
+        }
+
+        // Agnes Image advanced settings visibility and backend defaults
+        const isAgnesImage = selectedModel.startsWith('Agnes Image');
+        $('agnesImgAdvancedSection').hidden = !isAgnesImage;
+        if (!isAgnesImage) {
+            $('agnesImgAdvToggle').setAttribute('aria-expanded', 'false');
+            $('agnesImgAdvPanel').setAttribute('aria-hidden', 'true');
+        } else if (config.extra_settings) {
+            const extra = config.extra_settings;
+            const strengthOptions = Array.isArray(extra.strength_options)
+                ? extra.strength_options
+                : ['0.3', '0.5', '0.75', '0.9', '1.0'];
+            const strengthLabels = extra.strength_labels || {};
+            const items = strengthOptions.map(val => ({
+                value: String(val),
+                label: strengthLabels[String(val)] || val
+            }));
+            selectedAgnesImgStrength = agnesImgStrengthCombo.setItems(items, selectedAgnesImgStrength || String(extra.strength || '0.75'));
         }
 
         $('generateBtn').disabled =
@@ -3431,8 +3503,13 @@
                     form.append('agnes_seed', $('agnesSeed').value.trim());
                 }
             } else if (snapshot.model.startsWith('Agnes Image')) {
-                if ($('agnesNegative') && $('agnesNegative').value.trim()) {
-                    form.append('agnes_negative', $('agnesNegative').value.trim());
+                form.append('agnes_strength', selectedAgnesImgStrength || '0.75');
+                form.append('agnes_expand', $('agnesImgPromptExpansion')?.checked ? 'true' : 'false');
+                if ($('agnesImgNegative') && $('agnesImgNegative').value.trim()) {
+                    form.append('agnes_negative', $('agnesImgNegative').value.trim());
+                }
+                if ($('agnesImgSeed') && $('agnesImgSeed').value.trim()) {
+                    form.append('agnes_seed', $('agnesImgSeed').value.trim());
                 }
             }
 
@@ -3492,6 +3569,12 @@
         const isExpanded = $('agnesAdvToggle').getAttribute('aria-expanded') === 'true';
         $('agnesAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
         $('agnesAdvPanel').setAttribute('aria-hidden', String(isExpanded));
+    });
+
+    $('agnesImgAdvToggle')?.addEventListener('click', () => {
+        const isExpanded = $('agnesImgAdvToggle').getAttribute('aria-expanded') === 'true';
+        $('agnesImgAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
+        $('agnesImgAdvPanel').setAttribute('aria-hidden', String(isExpanded));
     });
 
     $('generateBtn').addEventListener('click', triggerGeneration);
