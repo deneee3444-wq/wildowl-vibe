@@ -230,7 +230,21 @@ except ImportError:
             "tiers": ["standard"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
             "resolutions": ["1K", "2K", "3K", "4K"],
-            "resolution": "2K"
+            "resolution": "2K",
+            "extra_settings": {
+                "strength": "0.75",
+                "strength_options": ["0.3", "0.5", "0.75", "0.9", "1.0"],
+                "strength_labels": {
+                    "0.3": "%30 (Hafif)",
+                    "0.5": "%50 (Orta)",
+                    "0.75": "%75 (Standart)",
+                    "0.9": "%90 (Güçlü)",
+                    "1.0": "%100 (Baskın)"
+                },
+                "enable_prompt_expansion": False,
+                "negative_prompt": "",
+                "seed": ""
+            }
         },
         "Agnes Image 2.1 Flash": {
             "model_id": "agnes-image-2.1-flash",
@@ -239,7 +253,21 @@ except ImportError:
             "tiers": ["standard"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
             "resolutions": ["1K", "2K", "3K", "4K"],
-            "resolution": "2K"
+            "resolution": "2K",
+            "extra_settings": {
+                "strength": "0.75",
+                "strength_options": ["0.3", "0.5", "0.75", "0.9", "1.0"],
+                "strength_labels": {
+                    "0.3": "%30 (Hafif)",
+                    "0.5": "%50 (Orta)",
+                    "0.75": "%75 (Standart)",
+                    "0.9": "%90 (Güçlü)",
+                    "1.0": "%100 (Baskın)"
+                },
+                "enable_prompt_expansion": False,
+                "negative_prompt": "",
+                "seed": ""
+            }
         },
         "Agnes Image 2.0 Flash": {
             "model_id": "agnes-image-2.0-flash",
@@ -248,7 +276,21 @@ except ImportError:
             "tiers": ["standard"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
             "resolutions": ["1K", "2K", "3K", "4K"],
-            "resolution": "2K"
+            "resolution": "2K",
+            "extra_settings": {
+                "strength": "0.75",
+                "strength_options": ["0.3", "0.5", "0.75", "0.9", "1.0"],
+                "strength_labels": {
+                    "0.3": "%30 (Hafif)",
+                    "0.5": "%50 (Orta)",
+                    "0.75": "%75 (Standart)",
+                    "0.9": "%90 (Güçlü)",
+                    "1.0": "%100 (Baskın)"
+                },
+                "enable_prompt_expansion": False,
+                "negative_prompt": "",
+                "seed": ""
+            }
         }
     }
     
@@ -608,7 +650,8 @@ def start_generation():
         'fps': int(request.form.get('agnes_fps', agnes_extra_cfg.get('fps', 24))),
         'enable_prompt_expansion': request.form.get('agnes_expand', str(agnes_extra_cfg.get('enable_prompt_expansion', False))).lower() == 'true',
         'negative_prompt': request.form.get('agnes_negative', agnes_extra_cfg.get('negative_prompt', '')),
-        'seed': request.form.get('agnes_seed', request.form.get('seed'))
+        'seed': request.form.get('agnes_seed', request.form.get('seed')),
+        'strength': float(request.form.get('agnes_strength', agnes_extra_cfg.get('strength', 0.75)))
     }
 
     # Store parameters & files directly in RAM dict
@@ -1258,6 +1301,8 @@ def run_job_in_background(job_id):
                         negative_prompt=agnes_p.get('negative_prompt', ""),
                         seed=agnes_p.get('seed'),
                         images=temp_img_paths,
+                        strength=float(agnes_p.get('strength', 0.75)),
+                        enable_prompt_expansion=bool(agnes_p.get('enable_prompt_expansion', False)),
                         log_callback=add_log
                     )
                     output_url = res.get("output")
