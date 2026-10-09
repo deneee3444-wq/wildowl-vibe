@@ -363,6 +363,51 @@
 
         .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
 
+        .audio-input-wrap {
+            position: relative;
+            display: flex;
+            align-items: center;
+            width: 100%;
+        }
+        .audio-upload-btn {
+            display: inline-flex;
+            width: 24px;
+            height: 24px;
+            align-items: center;
+            justify-content: center;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            color: var(--accent);
+            border-radius: 6px;
+            cursor: pointer;
+            padding: 0;
+            transition: border-color .15s, background .15s, transform .1s;
+        }
+        .audio-upload-btn:hover {
+            border-color: var(--accent);
+            background: rgba(216, 245, 138, 0.12);
+        }
+        .audio-upload-btn:active {
+            transform: scale(0.95);
+        }
+        .audio-clear-btn {
+            display: none;
+            width: 22px;
+            height: 22px;
+            align-items: center;
+            justify-content: center;
+            background: transparent;
+            border: 0;
+            color: var(--muted);
+            border-radius: 5px;
+            cursor: pointer;
+            padding: 0;
+            transition: color .15s;
+        }
+        .audio-clear-btn:hover {
+            color: var(--danger);
+        }
+
         /* Custom select trigger and floating option menu */
         .combo { min-width: 0; }
         .combo-trigger {
@@ -1521,14 +1566,14 @@
                                 <div class="adv-row">
                                     <span class="adv-row-label">Sansür Filtresi</span>
                                     <label class="adv-row-control switch-label">
-                                        <input type="checkbox" id="wanSafetyChecker" class="switch-input" checked>
+                                        <input type="checkbox" id="wanSafetyChecker" class="switch-input">
                                     </label>
                                 </div>
 
                                 <div class="adv-row">
                                     <span class="adv-row-label">Prompt Genişletme</span>
                                     <label class="adv-row-control switch-label">
-                                        <input type="checkbox" id="wanPromptExpansion" class="switch-input" checked>
+                                        <input type="checkbox" id="wanPromptExpansion" class="switch-input">
                                     </label>
                                 </div>
 
@@ -1556,14 +1601,14 @@
                                 <div class="adv-row">
                                     <span class="adv-row-label">Otomatik Düzeltme</span>
                                     <label class="adv-row-control switch-label">
-                                        <input type="checkbox" id="wanAutoFix" class="switch-input" checked>
+                                        <input type="checkbox" id="wanAutoFix" class="switch-input">
                                     </label>
                                 </div>
 
                                 <div class="adv-row">
                                     <span class="adv-row-label">AI Ses Üretimi</span>
                                     <label class="adv-row-control switch-label">
-                                        <input type="checkbox" id="wanGenerateAudio" class="switch-input">
+                                        <input type="checkbox" id="wanGenerateAudio" class="switch-input" checked>
                                     </label>
                                 </div>
 
@@ -1576,6 +1621,29 @@
                                     <div class="control-group">
                                         <label class="field-label" for="wanSeed">Seed</label>
                                         <input type="number" id="wanSeed" class="adv-seed" placeholder="Rastgele" min="1" max="999999" inputmode="numeric">
+                                    </div>
+                                </div>
+
+                                <div class="options-row" style="margin-top: 4px;">
+                                    <div class="control-group">
+                                        <label class="field-label" for="wanNegative">Negatif Prompt</label>
+                                        <input type="text" id="wanNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık, düşük kalite...">
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label class="field-label" for="wanAudioUrl">Özel Ses</label>
+                                        <div class="audio-input-wrap">
+                                            <input type="file" id="wanAudioFile" accept="audio/mp3,audio/wav,audio/mpeg,audio/*,.mp3,.wav,.ogg,.m4a" hidden>
+                                            <input type="text" id="wanAudioUrl" class="adv-seed" style="text-align: left; font-size: 11.5px; padding-right: 56px;" placeholder="URL veya ses (+)">
+                                            <div style="position: absolute; right: 5px; display: flex; align-items: center; gap: 3px;">
+                                                <button type="button" id="wanAudioClearBtn" class="audio-clear-btn" title="Sesi temizle">
+                                                    <svg class="icon" style="width: 12px; height: 12px;"><use href="#i-x"/></svg>
+                                                </button>
+                                                <button type="button" id="wanAudioUploadBtn" class="audio-upload-btn" title="Ses dosyası yükle (+)">
+                                                    <svg class="icon" style="width: 13px; height: 13px;"><use href="#i-plus"/></svg>
+                                                </button>
+                                            </div>
+                                        </div>
                                     </div>
                                 </div>
 
@@ -2389,6 +2457,7 @@
     );
 
     let selectedMovement = 'auto';
+    let selectedWanAudioFile = null;
 
     const wanMovementCombo = new StudioCombo(
         'wanMovementCombo',
@@ -3482,9 +3551,10 @@
             }
 
             if (snapshot.model === 'Wan 2.6 Video') {
+                const isExp = $('wanPromptExpansion').checked;
                 form.append('enable_safety_checker', $('wanSafetyChecker').checked ? 'true' : 'false');
-                form.append('enable_prompt_expansion', $('wanPromptExpansion').checked ? 'true' : 'false');
-                form.append('multi_shots', $('wanMultiShots').checked ? 'true' : 'false');
+                form.append('enable_prompt_expansion', isExp ? 'true' : 'false');
+                form.append('multi_shots', (isExp && $('wanMultiShots').checked) ? 'true' : 'false');
                 form.append('camerafixed', $('wanCameraFixed').checked ? 'true' : 'false');
                 form.append('loop', $('wanLoop').checked ? 'true' : 'false');
                 form.append('auto_fix', $('wanAutoFix').checked ? 'true' : 'false');
@@ -3492,6 +3562,14 @@
                 form.append('movement_amplitude', selectedMovement || 'auto');
                 if ($('wanSeed') && $('wanSeed').value.trim()) {
                     form.append('seed', $('wanSeed').value.trim());
+                }
+                if ($('wanNegative') && $('wanNegative').value.trim()) {
+                    form.append('wan_negative', $('wanNegative').value.trim());
+                }
+                if (selectedWanAudioFile) {
+                    form.append('wan_audio_file', selectedWanAudioFile);
+                } else if ($('wanAudioUrl') && $('wanAudioUrl').value.trim()) {
+                    form.append('wan_audio_url', $('wanAudioUrl').value.trim());
                 }
             } else if (snapshot.model === 'Agnes Video 2.0') {
                 form.append('agnes_fps', selectedAgnesFps || '24');
@@ -3557,6 +3635,88 @@
             $('generateBtn').setAttribute('aria-busy', 'false');
             $('generateBtn').disabled = !selectedRatio || !selectedTier;
         }
+    }
+
+    function syncWanMultiShots() {
+        const isExp = $('wanPromptExpansion')?.checked ?? false;
+        const msRow = $('wanMultiShots')?.closest('.adv-row');
+        if (msRow) {
+            msRow.style.opacity = isExp ? '1' : '0.45';
+            msRow.style.pointerEvents = isExp ? 'auto' : 'none';
+        }
+        if (!isExp && $('wanMultiShots')) {
+            $('wanMultiShots').checked = false;
+        }
+    }
+
+    $('wanPromptExpansion')?.addEventListener('change', syncWanMultiShots);
+    syncWanMultiShots();
+
+    // Wan 2.6 Özel Ses Dosyası / URL Yönetimi
+    const wanAudioFileEl = $('wanAudioFile');
+    const wanAudioUrlEl = $('wanAudioUrl');
+    const wanAudioUploadBtn = $('wanAudioUploadBtn');
+    const wanAudioClearBtn = $('wanAudioClearBtn');
+
+    wanAudioUploadBtn?.addEventListener('click', () => {
+        wanAudioFileEl?.click();
+    });
+
+    wanAudioFileEl?.addEventListener('change', () => {
+        if (wanAudioFileEl.files && wanAudioFileEl.files[0]) {
+            selectedWanAudioFile = wanAudioFileEl.files[0];
+            if (wanAudioUrlEl) {
+                wanAudioUrlEl.value = selectedWanAudioFile.name;
+                wanAudioUrlEl.title = selectedWanAudioFile.name;
+                wanAudioUrlEl.readOnly = true;
+            }
+            if (wanAudioClearBtn) wanAudioClearBtn.style.display = 'inline-flex';
+        }
+    });
+
+    wanAudioUrlEl?.addEventListener('input', () => {
+        if (!wanAudioUrlEl.readOnly) {
+            selectedWanAudioFile = null;
+            if (wanAudioFileEl) wanAudioFileEl.value = '';
+        }
+        if (wanAudioClearBtn) {
+            wanAudioClearBtn.style.display = wanAudioUrlEl.value.trim() ? 'inline-flex' : 'none';
+        }
+    });
+
+    wanAudioClearBtn?.addEventListener('click', () => {
+        selectedWanAudioFile = null;
+        if (wanAudioFileEl) wanAudioFileEl.value = '';
+        if (wanAudioUrlEl) {
+            wanAudioUrlEl.value = '';
+            wanAudioUrlEl.title = '';
+            wanAudioUrlEl.readOnly = false;
+        }
+        if (wanAudioClearBtn) wanAudioClearBtn.style.display = 'none';
+    });
+
+    const wanAudioWrap = wanAudioUrlEl?.parentElement;
+    if (wanAudioWrap) {
+        wanAudioWrap.addEventListener('dragover', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+        });
+        wanAudioWrap.addEventListener('drop', (e) => {
+            e.preventDefault();
+            e.stopPropagation();
+            if (e.dataTransfer && e.dataTransfer.files && e.dataTransfer.files.length > 0) {
+                const file = e.dataTransfer.files[0];
+                if (file.type.startsWith('audio/') || /\.(mp3|wav|ogg|m4a|flac|aac)$/i.test(file.name)) {
+                    selectedWanAudioFile = file;
+                    if (wanAudioUrlEl) {
+                        wanAudioUrlEl.value = file.name;
+                        wanAudioUrlEl.title = file.name;
+                        wanAudioUrlEl.readOnly = true;
+                    }
+                    if (wanAudioClearBtn) wanAudioClearBtn.style.display = 'inline-flex';
+                }
+            }
+        });
     }
 
     $('wanAdvToggle')?.addEventListener('click', () => {
