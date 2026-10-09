@@ -201,7 +201,7 @@ except ImportError:
             "aspect_ratios": ["1:1", "3:2", "2:3"],
             "resolution": "1K"
         },
-        "Qwen Image 2.1": {
+        "Qwen 2.1": {
             "model_id": "qwen-2.1",
             "tiers": ["standard"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"],
