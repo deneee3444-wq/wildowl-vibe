@@ -278,6 +278,12 @@ class TopVidClient:
         content_type = "image/jpeg"
         if ext in [".png"]: content_type = "image/png"
         elif ext in [".webp"]: content_type = "image/webp"
+        elif ext in [".mp3"]: content_type = "audio/mpeg"
+        elif ext in [".wav"]: content_type = "audio/wav"
+        elif ext in [".m4a"]: content_type = "audio/mp4"
+        elif ext in [".ogg"]: content_type = "audio/ogg"
+        elif ext in [".aac"]: content_type = "audio/aac"
+        elif ext in [".flac"]: content_type = "audio/flac"
 
         files = {"file": (filename, file_bytes, content_type)}
         res = self.session.post(url, files=files, headers=headers, timeout=60)
@@ -433,9 +439,12 @@ def run_once(
     multi_shots: bool = False,
     camerafixed: bool = False,
     loop: bool = False,
-    auto_fix: bool = True,
+    auto_fix: bool = False,
     movement_amplitude: str = "auto",
     generate_audio: bool = True,
+    negative_prompt: str = "",
+    audio_path: str = None,
+    audio_url: str = "",
     seed: int = None
 ) -> dict:
     """
@@ -443,7 +452,7 @@ def run_once(
     Görsel varsa Image-to-Video (tek kare, endframe yok), yoksa Text-to-Video çalışır.
     Seçilen çözünürlük ve süreye göre gereken puanı (160, 240, 320, 480, 720) hesaplayıp
     her görev için o puana özel tek kullanımlık taze hesap açar.
-    Ekstra ayarlar (sansür, ses, hareket, prompt genişletme vb.) parametrik olarak aktarılır.
+    Boş veya desteklenmeyen hiçbir gereksiz parametre payloada eklenmez.
     """
     def _log(msg, status="info", pct=None):
         print(f"[TopVid Wan 2.6] {msg}")
@@ -477,35 +486,57 @@ def run_once(
     except Exception:
         norm_seed = random.randint(1000, 999999)
 
-    norm_movement = movement_amplitude if movement_amplitude in ["auto", "low", "medium", "high"] else "auto"
+    mov = str(movement_amplitude).lower().strip()
+    if mov in ["auto", "small", "medium", "large"]:
+        norm_movement = mov
+    elif mov == "low":
+        norm_movement = "small"
+    elif mov == "high":
+        norm_movement = "large"
+    else:
+        norm_movement = "auto"
 
+    # Temel Wan 2.6 Payload Paketi
     payload = {
         "model_id": model_id,
+        "is_public": 1,
         "prompt": prompt,
         "aspect_ratio": norm_ar,
         "duration": norm_dur,
         "resolution": norm_res,
         "seed": norm_seed,
-        "is_public": 1,
-        # 1. Sansür Filtresi (Safety Checker)
         "enable_safety_checker": bool(enable_safety_checker),
-        # 2. Prompt Expansion
-        "enable_prompt_expansion": bool(enable_prompt_expansion),
-        # 3. Multi-Shots
-        "multi_shots": bool(multi_shots),
-        # 4. Sabit Kamera (Camera Fixed)
         "camerafixed": bool(camerafixed),
-        # 5. Sonsuz Döngü (Seamless Loop)
-        "loop": bool(loop),
-        # 6. Auto Fix: Titreme & Renk Düzeltme
-        "auto_fix": bool(auto_fix),
-        # 7. Hareket Şiddeti: Auto / Low / Medium / High
         "movement_amplitude": norm_movement,
-        # 8. AI Ses Üretimi
+        "auto_fix": bool(auto_fix),
+        "loop": bool(loop),
         "generate_audio": bool(generate_audio)
     }
 
-    # Image-to-Video ise görseli yükle (ENDFRAME YOK!)
+    # Negatif prompt boş değilse ekle (boşsa payloada eklenmez)
+    if negative_prompt and negative_prompt.strip():
+        payload["negative_prompt"] = negative_prompt.strip()
+
+    # Prompt Expansion & Multi-Shots bağımlılık kuralı: multi_shots yalnızca prompt expansion açıkken eklenir
+    if enable_prompt_expansion:
+        payload["enable_prompt_expansion"] = True
+        payload["multi_shots"] = bool(multi_shots)
+
+    # Özel Ses Dosyası veya Ses URL'si
+    final_audio_url = ""
+    if audio_path and os.path.exists(audio_path):
+        _log("Özel ses dosyası sunucuya yükleniyor...", "uploading", 33)
+        try:
+            final_audio_url = client.upload_file(audio_path, filename=os.path.basename(audio_path))
+        except Exception as aud_err:
+            _log(f"Ses yükleme uyarısı: {aud_err}", "uploading", 33)
+    elif audio_url and audio_url.strip():
+        final_audio_url = audio_url.strip()
+
+    if final_audio_url:
+        payload["audio_url"] = final_audio_url
+
+    # Image-to-Video görsel alanları (tek referans görsel, start/end frame morf yok!)
     if is_i2v:
         _log("Referans başlangıç görseli sunucuya yükleniyor...", "uploading", 35)
         try:
@@ -517,7 +548,6 @@ def run_once(
         payload["image_url"] = img_url
         payload["start_image_url"] = img_url
         payload["first_image_url"] = img_url
-        # "endframe de olmasın" kuralı gereği end_image_url kesinlikle eklenmez!
 
     _log(f"Wan 2.6 görev isteği iletiliyor (Mod: {'I2V' if is_i2v else 'T2V'}, {norm_res}, {norm_dur}s, {needed_pts} Puan)...", "generating", 45)
 
@@ -532,6 +562,13 @@ def run_once(
             payload["image_url"] = img_url
             payload["start_image_url"] = img_url
             payload["first_image_url"] = img_url
+        if audio_path and os.path.exists(audio_path) and not final_audio_url:
+            _log("Ses dosyası yeni hesaba aktarılıyor...", "uploading", 36)
+            try:
+                final_audio_url = client.upload_file(audio_path, filename=os.path.basename(audio_path))
+                payload["audio_url"] = final_audio_url
+            except Exception:
+                pass
         task_res = client.create_video_task(task_type=task_type, payload=payload)
 
     if task_res.get("code") != 200 or not task_res.get("data") or not task_res["data"].get("task"):
@@ -555,7 +592,9 @@ def run_once(
             _log("Video üretimi tamamlandı! URL alınıyor...", "generating", 95)
             detail_res = client.get_task_detail(task_id)
             d_data = detail_res.get("data") or {}
-            video_url = d_data.get("cover_image_url") or d_data.get("url") or ""
+
+            # Gerçek video URL'sini önceliklendir (cover_image_url kapak resmidir)
+            video_url = d_data.get("url") or d_data.get("video_url") or ""
 
             if not video_url:
                 try:
@@ -564,6 +603,9 @@ def run_once(
                         video_url = assets[0].get("url") or assets[0].get("watermark_url") or ""
                 except Exception:
                     pass
+
+            if not video_url:
+                video_url = d_data.get("cover_image_url") or ""
 
             if not video_url:
                 raise RuntimeError("Video tamamlandı ancak URL alınamadı.")
