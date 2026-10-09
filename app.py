@@ -82,15 +82,17 @@ except ImportError:
                 "multi_shots": False,
                 "camerafixed": False,
                 "loop": False,
-                "auto_fix": True,
+                "auto_fix": False,
                 "generate_audio": True,
+                "audio_url": "",
+                "negative_prompt": "",
                 "movement_amplitude": "auto",
-                "movement_amplitudes": ["auto", "low", "medium", "high"],
+                "movement_amplitudes": ["auto", "small", "medium", "large"],
                 "movement_amplitude_labels": {
                     "auto": "Otomatik",
-                    "low": "Düşük",
+                    "small": "Düşük",
                     "medium": "Orta",
-                    "high": "Yüksek"
+                    "large": "Yüksek"
                 }
             }
         },
@@ -630,6 +632,17 @@ def start_generation():
                         'content_type': file.content_type or 'image/jpeg'
                     })
                 
+    # Audio file upload for Wan 2.6
+    wan_audio_path = None
+    if 'wan_audio_file' in request.files:
+        audio_file = request.files['wan_audio_file']
+        if audio_file and audio_file.filename:
+            temp_dir = os.path.join(ROOT_DIR, "scratch")
+            os.makedirs(temp_dir, exist_ok=True)
+            ext = os.path.splitext(audio_file.filename)[1] or ".mp3"
+            wan_audio_path = os.path.join(temp_dir, f"wan_audio_{job_id}{ext}")
+            audio_file.save(wan_audio_path)
+
     # WAN 2.6 Extra parameters from request or model config defaults
     extra_cfg = MODELS_CONFIG.get(model, {}).get("extra_settings", {})
     wan_params = {
@@ -638,8 +651,11 @@ def start_generation():
         'multi_shots': request.form.get('multi_shots', str(extra_cfg.get('multi_shots', False))).lower() == 'true',
         'camerafixed': request.form.get('camerafixed', str(extra_cfg.get('camerafixed', False))).lower() == 'true',
         'loop': request.form.get('loop', str(extra_cfg.get('loop', False))).lower() == 'true',
-        'auto_fix': request.form.get('auto_fix', str(extra_cfg.get('auto_fix', True))).lower() == 'true',
+        'auto_fix': request.form.get('auto_fix', str(extra_cfg.get('auto_fix', False))).lower() == 'true',
         'generate_audio': request.form.get('generate_audio', str(extra_cfg.get('generate_audio', True))).lower() == 'true',
+        'negative_prompt': request.form.get('wan_negative', extra_cfg.get('negative_prompt', '')).strip(),
+        'audio_url': request.form.get('wan_audio_url', extra_cfg.get('audio_url', '')).strip(),
+        'audio_path': wan_audio_path,
         'movement_amplitude': request.form.get('movement_amplitude', extra_cfg.get('movement_amplitude', 'auto')),
         'seed': request.form.get('seed')
     }
@@ -1017,9 +1033,12 @@ def run_job_in_background(job_id):
                     multi_shots=wan_p.get('multi_shots', False),
                     camerafixed=wan_p.get('camerafixed', False),
                     loop=wan_p.get('loop', False),
-                    auto_fix=wan_p.get('auto_fix', True),
+                    auto_fix=wan_p.get('auto_fix', False),
                     movement_amplitude=wan_p.get('movement_amplitude', 'auto'),
                     generate_audio=wan_p.get('generate_audio', True),
+                    negative_prompt=wan_p.get('negative_prompt', ''),
+                    audio_path=wan_p.get('audio_path'),
+                    audio_url=wan_p.get('audio_url', ''),
                     seed=wan_p.get('seed')
                 )
                 output_url = res.get("output")
@@ -1051,6 +1070,11 @@ def run_job_in_background(job_id):
                 if temp_img_path and "topvid_input_" in temp_img_path and os.path.exists(temp_img_path):
                     try:
                         os.remove(temp_img_path)
+                    except Exception:
+                        pass
+                if wan_p.get('audio_path') and os.path.exists(wan_p['audio_path']):
+                    try:
+                        os.remove(wan_p['audio_path'])
                     except Exception:
                         pass
             return
