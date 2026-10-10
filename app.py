@@ -1177,7 +1177,7 @@ def run_job_in_background(job_id):
                     model_id = model_cfg.get("model_id", "openai/gpt-image-2.5")
                     mode = model_cfg.get("mode", "sunburst")
                     ar_choice = aspect_ratio or "1:1"
-                    quality_choice = tier if tier in ["low", "medium"] else "medium"
+                    quality_choice = tier if tier in ["low", "medium", "high", "xhigh"] else "medium"
                     res_choice = resolution if resolution in ["1k", "2k", "4k"] else "2k"
 
                     res = morphStudioAI.run_image(
