@@ -142,10 +142,10 @@ except ImportError:
             "type": "image",
             "provider": "morph",
             "mode": "sunburst",
-            "tiers": ["medium", "low"],
-            "tier_labels": {"medium": "Medium Kalite", "low": "Low Kalite"},
+            "tiers": ["low", "medium", "high", "xhigh"],
+            "tier_labels": {"low": "Low Kalite", "medium": "Medium Kalite", "high": "High Kalite", "xhigh": "Xhigh Kalite"},
             "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"],
-            "resolutions": ["2k", "1k", "4k"],
+            "resolutions": ["1k", "2k", "4k"],
             "resolution": "2k"
         },
         "GPT Image 2.5 (Flare)": {
@@ -153,10 +153,10 @@ except ImportError:
             "type": "image",
             "provider": "morph",
             "mode": "flare",
-            "tiers": ["medium", "low"],
-            "tier_labels": {"medium": "Medium Kalite", "low": "Low Kalite"},
+            "tiers": ["low", "medium", "high", "xhigh"],
+            "tier_labels": {"low": "Low Kalite", "medium": "Medium Kalite", "high": "High Kalite", "xhigh": "Xhigh Kalite"},
             "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"],
-            "resolutions": ["2k", "1k", "4k"],
+            "resolutions": ["1k", "2k", "4k"],
             "resolution": "2k"
         },
         "Wan 2.7": {
