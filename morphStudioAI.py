@@ -209,6 +209,34 @@ class MorphStudioClient:
             return False
 
         _log("Morph Studio oturumu başarıyla doğrulandı ve aktifleştirildi.", "login", 50)
+
+        # 5. Bonus Krediyi Topla (+25 Kredi - Follow on X)
+        try:
+            claim_resp = self.session.post(
+                "https://api.morphstudio.com/api/user/rewards/follow-x/claim",
+                headers=BASE_HEADERS,
+                timeout=15
+            )
+            if claim_resp.status_code == 200:
+                _log(f"Bonus ödül toplandı (+25 Kredi): {claim_resp.text}", "login", 52)
+            else:
+                _log(f"Bonus ödül yanıtı: {claim_resp.status_code} -> {claim_resp.text}", "warning", 52)
+        except Exception as e:
+            _log(f"Bonus ödül isteği sırasında hata: {e}", "warning", 52)
+
+        # Kredi durumunu kontrol et
+        try:
+            cred_resp = self.session.get(
+                "https://api.morphstudio.com/api/user/credit",
+                headers=BASE_HEADERS,
+                timeout=10
+            )
+            if cred_resp.status_code == 200:
+                credit_val = cred_resp.json().get("credit", 0)
+                _log(f"Toplam kullanılabilir bakiye: {credit_val} kredi", "login", 55)
+        except Exception:
+            pass
+
         return True
 
     def upload_image(self, file_path_or_bytes: Union[str, bytes], filename: str = "image.jpg", log_callback=None) -> Dict[str, str]:
