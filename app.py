@@ -134,7 +134,7 @@ except ImportError:
             "tiers": ["5", "10"],
             "tier_labels": {"5": "5 Saniye", "10": "10 Saniye"},
             "aspect_ratios": ["16:9", "9:16", "1:1"],
-            "resolutions": ["480p", "720p"],
+            "resolutions": ["480p", "720p", "1080p"],
             "resolution": "480p"
         },
         "Nano Banana 2.1": {
