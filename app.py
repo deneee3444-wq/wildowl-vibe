@@ -212,8 +212,9 @@ except ImportError:
         },
         "Qwen 2.1": {
             "model_id": "qwen-2.1",
-            "tiers": ["standard"],
+            "tiers": ["standard", "pro", "turbo"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"],
+            "resolutions": ["1K", "2K"],
             "resolution": "1K"
         },
         "Qwen Image 2": {
