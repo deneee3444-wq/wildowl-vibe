@@ -1122,7 +1122,7 @@ def run_job_in_background(job_id):
 
                 try:
                     duration = int(tier) if tier in ["5", "10"] else 5
-                    res_choice = resolution if resolution in ["480p", "720p"] else "480p"
+                    res_choice = resolution if resolution in ["480p", "720p", "1080p"] else "480p"
                     model_id = model_cfg.get("model_id", "seedance_v1_pro_fast")
 
                     res = morphStudioAI.run_video(
