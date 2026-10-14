@@ -137,6 +137,15 @@ except ImportError:
             "resolutions": ["480p", "720p"],
             "resolution": "480p"
         },
+        "Nano Banana 2.1": {
+            "model_id": "google/nano-banana-2.1",
+            "type": "image",
+            "provider": "morph",
+            "tiers": ["standard"],
+            "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1"],
+            "resolutions": ["1k", "2k", "4k"],
+            "resolution": "1k"
+        },
         "GPT Image 2.5 (Sunburst)": {
             "model_id": "openai/gpt-image-2.5",
             "type": "image",
@@ -1085,8 +1094,8 @@ def run_job_in_background(job_id):
                         pass
             return
 
-        # MORPH STUDIO HANDLER (Seedance 1.0 Pro Fast & GPT Image 2.5)
-        if model_name in ["Seedance 1.0 Pro Fast", "Seedance Pro Fast", "GPT Image 2.5 (Sunburst)", "GPT Image 2.5 (Flare)"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "morph"):
+        # MORPH STUDIO HANDLER (Seedance 1.0 Pro Fast, GPT Image 2.5 & Nano Banana 2.1)
+        if model_name in ["Seedance 1.0 Pro Fast", "Seedance Pro Fast", "Nano Banana 2.1", "GPT Image 2.5 (Sunburst)", "GPT Image 2.5 (Flare)"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "morph"):
             if not morphStudioAI:
                 add_log("Morph Studio modülü yüklenemedi!", "error", 5)
                 if job_id in ACTIVE_JOBS:
