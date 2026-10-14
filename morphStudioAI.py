@@ -19,6 +19,12 @@ Desteklenen Modeller:
    - Kalite: low, medium, high, xhigh
    - En-boy oranları: "1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"
    - Çoklu referans görsel (I2I) veya salt metin (T2I)
+3. Nano Banana 2.1 (Görsel):
+   - model_id: "google/nano-banana-2.1"
+   - Çözünürlük / Kalite: 1k, 2k, 4k
+   - Görsel sayısı: number_of_images (varsayılan: 1)
+   - En-boy oranları: "1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1"
+   - Çoklu referans görsel (I2I) veya salt metin (T2I)
 ================================================================================
 """
 
@@ -394,14 +400,36 @@ class MorphStudioClient:
             log_callback("Video üretimi zaman aşımına uğradı.", "error", 90)
         return None
 
-    def create_image(self, prompt: str, input_images: list = None, model_id: str = "openai/gpt-image-2.5", aspect_ratio: str = "1:1", mode: str = "sunburst", quality: str = "medium", resolution: str = "2k", log_callback=None) -> dict:
-        params = {
-            "prompt": prompt,
-            "aspect_ratio": aspect_ratio,
-            "mode": mode,
-            "quality": quality,
-            "resolution": resolution,
-        }
+    def create_image(
+        self,
+        prompt: str,
+        input_images: list = None,
+        model_id: str = "openai/gpt-image-2.5",
+        aspect_ratio: str = "1:1",
+        mode: str = "sunburst",
+        quality: str = "medium",
+        resolution: str = "2k",
+        number_of_images: int = 1,
+        log_callback=None
+    ) -> dict:
+        is_nano_banana = "nano-banana" in model_id.lower()
+        if is_nano_banana:
+            # google/nano-banana-2.1 için kalite / çözünürlük parametresi 'quality' ("1k", "2k", "4k")
+            target_quality = quality if quality in ("1k", "2k", "4k") else (resolution if resolution in ("1k", "2k", "4k") else "1k")
+            params = {
+                "prompt": prompt,
+                "aspect_ratio": aspect_ratio,
+                "number_of_images": int(number_of_images),
+                "quality": target_quality,
+            }
+        else:
+            params = {
+                "prompt": prompt,
+                "aspect_ratio": aspect_ratio,
+                "mode": mode,
+                "quality": quality,
+                "resolution": resolution,
+            }
 
         if input_images:
             media_inputs = []
@@ -426,7 +454,10 @@ class MorphStudioClient:
 
         if log_callback:
             img_info = f" ({len(input_images)} Referans Görsel)" if input_images else ""
-            log_callback(f"Görsel üretim isteği iletiliyor (Model: {model_id}, Mod: {mode}, {resolution}, {quality}){img_info}...", "generating", 75)
+            if is_nano_banana:
+                log_callback(f"Görsel üretim isteği iletiliyor (Model: {model_id}, Oran: {aspect_ratio}, Kalite: {target_quality}, Adet: {number_of_images}){img_info}...", "generating", 75)
+            else:
+                log_callback(f"Görsel üretim isteği iletiliyor (Model: {model_id}, Mod: {mode}, {resolution}, {quality}){img_info}...", "generating", 75)
 
         resp = self.session.post(
             "https://api.morphstudio.com/api/v1/moca/image_session/node/create",
@@ -609,10 +640,11 @@ def run_image(
     aspect_ratio: str = "1:1",
     quality: str = "medium",
     resolution: str = "2k",
+    number_of_images: int = 1,
     log_callback=None
 ) -> Dict[str, Any]:
     """
-    GPT Image 2.5 (Sunburst veya Flare modu) görsel üretimi fonksiyonu.
+    GPT Image 2.5 (Sunburst/Flare) veya Google Nano Banana 2.1 görsel üretimi fonksiyonu.
     Mevcut hesabı kullanır, hata durumunda yeni hesap açıp tekrar dener.
     """
     def _log(msg, status="info", pct=None):
@@ -635,7 +667,14 @@ def run_image(
                 if up_res.get("objectId") and up_res.get("key"):
                     uploaded_images.append({"objectId": up_res["objectId"], "key": up_res["key"]})
 
-    _log(f"Görsel üretim isteği gönderiliyor (Model: {model_id}, Mod: {mode}, Oran: {aspect_ratio}, Kalite: {quality}, Çözünürlük: {resolution})...", "generating", 75)
+    is_nano_banana = "nano-banana" in model_id.lower()
+    if is_nano_banana:
+        eff_quality = quality if quality in ("1k", "2k", "4k") else (resolution if resolution in ("1k", "2k", "4k") else "1k")
+        _log(f"Görsel üretim isteği gönderiliyor (Model: {model_id}, Oran: {aspect_ratio}, Kalite: {eff_quality}, Adet: {number_of_images})...", "generating", 75)
+    else:
+        eff_quality = quality
+        _log(f"Görsel üretim isteği gönderiliyor (Model: {model_id}, Mod: {mode}, Oran: {aspect_ratio}, Kalite: {quality}, Çözünürlük: {resolution})...", "generating", 75)
+
     image_res = client.create_image(
         prompt=prompt,
         input_images=uploaded_images if uploaded_images else None,
@@ -644,6 +683,7 @@ def run_image(
         mode=mode,
         quality=quality,
         resolution=resolution,
+        number_of_images=number_of_images,
         log_callback=_log
     )
 
@@ -665,6 +705,7 @@ def run_image(
             mode=mode,
             quality=quality,
             resolution=resolution,
+            number_of_images=number_of_images,
             log_callback=_log
         )
 
@@ -682,7 +723,8 @@ def run_image(
         "model": model_id,
         "mode": mode,
         "aspect_ratio": aspect_ratio,
-        "quality": quality,
-        "resolution": resolution,
+        "quality": eff_quality if is_nano_banana else quality,
+        "resolution": eff_quality if is_nano_banana else resolution,
+        "number_of_images": number_of_images,
         "user_id": client.user_id
     }
