@@ -7,6 +7,6 @@ google-auth-httplib2
 pycryptodome
 beautifulsoup4
 cloakbrowser
+playwright
 curl_cffi
 Pillow
-
