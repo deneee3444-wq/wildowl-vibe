@@ -441,7 +441,7 @@ class KeyBucket:
         self.last_dispatch_time = 0.0
         self.slots_assigned = 0
         self.dispatched_events: Dict[int, threading.Event] = {}
-        self.slots_lock = threading.Lock()
+        self.slots_lock = threading.RLock()
 
     def get_event(self, slot_idx: int) -> threading.Event:
         with self.slots_lock:
@@ -464,12 +464,16 @@ class KeyBucket:
     def mark_dispatched(self, slot_idx: int):
         with self.slots_lock:
             self.last_dispatch_time = time.time()
-            self.get_event(slot_idx).set()
+            if slot_idx not in self.dispatched_events:
+                self.dispatched_events[slot_idx] = threading.Event()
+            self.dispatched_events[slot_idx].set()
 
     def mark_failed_or_skipped(self, slot_idx: int):
         """Eğer bir slot hata alırsa veya iptal edilirse sonraki slotların kilitlenmemesi için sinyal verir."""
         with self.slots_lock:
-            self.get_event(slot_idx).set()
+            if slot_idx not in self.dispatched_events:
+                self.dispatched_events[slot_idx] = threading.Event()
+            self.dispatched_events[slot_idx].set()
 
 
 class DeApiKeyManager:
