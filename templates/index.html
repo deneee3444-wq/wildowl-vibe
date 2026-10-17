@@ -361,7 +361,22 @@
             text-align: left;
         }
 
-        .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+        .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+        .options-row .field-label {
+            height: 17px;
+            line-height: 17px;
+            margin-bottom: 5px;
+            font-size: 11px;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+        .options-row .combo-trigger,
+        .options-row .adv-seed {
+            height: 38px;
+            min-height: 38px;
+            box-sizing: border-box;
+        }
 
         .audio-input-wrap {
             position: relative;
@@ -540,6 +555,105 @@
             place-items: center;
             border: 1px dashed #ffffff25;
             color: var(--muted);
+        }
+
+        /* Reference Mode Tabs & Frame Slots */
+        .ref-mode-tabs {
+            display: inline-flex;
+            align-items: center;
+            gap: 4px;
+            background: transparent;
+            border: none;
+            padding: 0;
+        }
+        .ref-tab-btn {
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            width: 26px;
+            height: 26px;
+            border-radius: 6px;
+            background: transparent;
+            border: 1px solid transparent;
+            color: var(--muted);
+            cursor: pointer;
+            transition: all .15s ease;
+            padding: 0;
+        }
+        .ref-tab-btn:hover {
+            color: var(--text);
+            background: var(--surface-2);
+            border-color: var(--line);
+        }
+        .ref-tab-btn.active {
+            color: var(--accent);
+            background: #d8f58a14;
+            border-color: #d8f58a40;
+        }
+        .ref-tab-btn .icon {
+            width: 15px;
+            height: 15px;
+            display: block;
+        }
+
+        .ref-frames-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 8px;
+            width: 100%;
+        }
+        .ref-frame-slot {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+            min-width: 0;
+        }
+        .ref-frame-tag {
+            font-size: 10.5px;
+            font-weight: 500;
+            color: var(--muted);
+            white-space: nowrap;
+        }
+        .ref-frame-drop {
+            position: relative;
+            width: 100%;
+            height: 52px;
+            border-radius: 8px;
+            background: var(--surface-2);
+            border: 1px dashed #ffffff25;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            overflow: hidden;
+            color: var(--muted);
+            transition: border-color .15s, background .15s;
+        }
+        .ref-frame-drop:hover, .ref-frame-drop.dragover {
+            border-color: #d8f58a65;
+            background: #d8f58a05;
+        }
+        .ref-frame-empty {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: var(--muted);
+            pointer-events: none;
+        }
+        .ref-frame-empty .icon {
+            width: 15px;
+            height: 15px;
+        }
+        .ref-frame-preview {
+            width: 100%;
+            height: 100%;
+            position: relative;
+        }
+        .ref-frame-preview img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
         }
 
         .prompt-group {
@@ -1419,6 +1533,8 @@
     <symbol id="i-motion" viewBox="0 0 24 24"><path d="m12 14 4-4"/><path d="M3.34 19a10 10 0 1 1 17.32 0"/></symbol>
     <symbol id="i-film" viewBox="0 0 24 24"><rect width="20" height="20" x="2" y="2" rx="2.18" ry="2.18"/><path d="M7 2v20M17 2v20M2 12h20M2 7h5M2 17h5M17 17h5M17 7h5"/></symbol>
     <symbol id="i-blend" viewBox="0 0 24 24"><circle cx="9" cy="12" r="6"/><circle cx="15" cy="12" r="6"/></symbol>
+    <symbol id="i-music" viewBox="0 0 24 24"><path d="M9 18V5l12-2v13M9 18a3 3 0 1 1-6 0 3 3 0 0 1 6 0Zm12-2a3 3 0 1 1-6 0 3 3 0 0 1 6 0Z"/></symbol>
+    <symbol id="i-keyframes" viewBox="0 0 24 24"><rect x="2" y="4" width="7" height="16" rx="2"/><rect x="15" y="4" width="7" height="16" rx="2"/><path d="M9 12h5m-2.5-2.5L14 12l-2.5 2.5"/></symbol>
 </svg>
 
 {% if not logged_in %}
@@ -1512,22 +1628,112 @@
                 </div>
 
                 <div class="control-group reference-group" id="referenceControlGroup">
-                    <div class="field-label">
-                        <span>Referans görseller</span>
-                        <span id="uploadCount" class="mono">0 / 3</span>
-                    </div>
-                    <div id="referenceArea">
-                        <div class="reference-zone" id="dropzone" role="button" tabindex="0"
-                             aria-label="Referans görsel yükle">
-                            <svg class="icon"><use href="#i-upload"/></svg>
-                            <div>
-                                <strong>Görsel ekle veya sürükle</strong>
-                                <small>JPG, PNG, WEBP · En fazla 3</small>
+                    <div class="field-label" style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 6px;">
+                        <div style="display: flex; align-items: center; gap: 7px;">
+                            <span id="refAreaTitle">Referans</span>
+                            <div class="ref-mode-tabs" id="refModeTabs" style="display: none;">
+                                <button type="button" class="ref-tab-btn active" id="refTabGallery" title="Referans Görseller (1-3)">
+                                    <svg class="icon"><use href="#i-image"/></svg>
+                                </button>
+                                <button type="button" class="ref-tab-btn" id="refTabFrames" title="Start & End Kareleri (İlk / Son Kare)">
+                                    <svg class="icon"><use href="#i-keyframes"/></svg>
+                                </button>
+                                <button type="button" class="ref-tab-btn" id="refTabMedia" title="Özel Ses & Video Medyası">
+                                    <svg class="icon"><use href="#i-video"/></svg>
+                                </button>
                             </div>
                         </div>
-                        <div class="reference-grid" id="uploadPreviews" hidden></div>
+                        <span id="uploadCount" class="mono">0 / 3</span>
                     </div>
-                    <input type="file" id="fileInput" accept="image/*" multiple hidden>
+
+                    <!-- 1. Standart Görsel Alanı (Mevcut Yapı) -->
+                    <div id="refViewGallery">
+                        <div id="referenceArea">
+                            <div class="reference-zone" id="dropzone" role="button" tabindex="0"
+                                 aria-label="Referans görsel yükle">
+                                <svg class="icon"><use href="#i-upload"/></svg>
+                                <div>
+                                    <strong>Görsel ekle veya sürükle</strong>
+                                    <small>JPG, PNG, WEBP · En fazla 3</small>
+                                </div>
+                            </div>
+                            <div class="reference-grid" id="uploadPreviews" hidden></div>
+                        </div>
+                        <input type="file" id="fileInput" accept="image/*" multiple hidden>
+                    </div>
+
+                    <!-- 2. Start & End Karesi Modu -->
+                    <div id="refViewFrames" hidden>
+                        <div class="ref-frames-grid">
+                            <div class="ref-frame-slot">
+                                <span class="ref-frame-tag">İlk kare</span>
+                                <div class="ref-frame-drop" id="startFrameDrop" role="button" tabindex="0">
+                                    <input type="file" id="startFrameInput" accept="image/*" hidden>
+                                    <div class="ref-frame-empty" id="startFrameEmpty">
+                                        <svg class="icon"><use href="#i-plus"/></svg>
+                                    </div>
+                                    <div class="ref-frame-preview" id="startFramePreview" hidden>
+                                        <img src="" id="startFrameImg" alt="Start Frame">
+                                        <button type="button" class="reference-remove" id="startFrameRemove" title="Kaldır">
+                                            <svg class="icon"><use href="#i-x"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+
+                            <div class="ref-frame-slot">
+                                <span class="ref-frame-tag">Son kare</span>
+                                <div class="ref-frame-drop" id="endFrameDrop" role="button" tabindex="0">
+                                    <input type="file" id="endFrameInput" accept="image/*" hidden>
+                                    <div class="ref-frame-empty" id="endFrameEmpty">
+                                        <svg class="icon"><use href="#i-plus"/></svg>
+                                    </div>
+                                    <div class="ref-frame-preview" id="endFramePreview" hidden>
+                                        <img src="" id="endFrameImg" alt="End Frame">
+                                        <button type="button" class="reference-remove" id="endFrameRemove" title="Kaldır">
+                                            <svg class="icon"><use href="#i-x"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- 3. Ses & Video Medya Modu -->
+                    <div id="refViewMedia" hidden>
+                        <div class="ref-media-wrap">
+                            <div class="control-group" style="margin-bottom: 6px;">
+                                <label class="field-label" style="font-size: 11px;">Özel Ses</label>
+                                <div class="audio-input-wrap">
+                                    <input type="file" id="deapiAudioFile" accept="audio/mp3,audio/wav,audio/mpeg,audio/*,.mp3,.wav,.ogg,.m4a" hidden>
+                                    <input type="text" id="deapiAudioUrl" class="adv-seed" style="text-align: left; font-size: 11.5px; padding-right: 56px;" placeholder="Ses URL veya dosya (+)">
+                                    <div style="position: absolute; right: 5px; display: flex; align-items: center; gap: 3px;">
+                                        <button type="button" id="deapiAudioClearBtn" class="audio-clear-btn" title="Sesi temizle">
+                                            <svg class="icon" style="width: 12px; height: 12px;"><use href="#i-x"/></svg>
+                                        </button>
+                                        <button type="button" id="deapiAudioUploadBtn" class="audio-upload-btn" title="Ses dosyası yükle (+)">
+                                            <svg class="icon" style="width: 13px; height: 13px;"><use href="#i-plus"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                            <div class="control-group">
+                                <label class="field-label" style="font-size: 11px;">Video Referansı</label>
+                                <div class="audio-input-wrap">
+                                    <input type="file" id="deapiVideoFile" accept="video/mp4,video/quicktime,video/webm,.mp4,.mov,.webm" hidden>
+                                    <input type="text" id="deapiVideoUrl" class="adv-seed" style="text-align: left; font-size: 11.5px; padding-right: 56px;" placeholder="Video URL veya dosya (+)">
+                                    <div style="position: absolute; right: 5px; display: flex; align-items: center; gap: 3px;">
+                                        <button type="button" id="deapiVideoClearBtn" class="audio-clear-btn" title="Videoyu temizle">
+                                            <svg class="icon" style="width: 12px; height: 12px;"><use href="#i-x"/></svg>
+                                        </button>
+                                        <button type="button" id="deapiVideoUploadBtn" class="audio-upload-btn" title="Video dosyası yükle (+)">
+                                            <svg class="icon" style="width: 13px; height: 13px;"><use href="#i-plus"/></svg>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
                 </div>
 
                 <div class="creator-settings">
@@ -1665,12 +1871,12 @@
 
                                 <div class="options-row">
                                     <div class="control-group">
-                                        <div class="field-label" id="agnesFpsLabel">Kare Hızı (FPS)</div>
+                                        <div class="field-label" id="agnesFpsLabel">Kare Hızı</div>
                                         <div class="combo" id="agnesFpsCombo"></div>
                                     </div>
 
                                     <div class="control-group">
-                                        <div class="field-label">Prompt Genişletme</div>
+                                        <div class="field-label">Prompt Geliştir</div>
                                         <label class="combo-trigger" style="cursor: pointer; justify-content: space-between; padding-right: 8px;">
                                             <span class="combo-value" style="font-size: 12px; color: var(--muted);">Otomatik</span>
                                             <input type="checkbox" id="agnesPromptExpansion" class="switch-input" style="flex: 0 0 auto;">
@@ -1713,7 +1919,7 @@
                                     </div>
 
                                     <div class="control-group">
-                                        <div class="field-label">Prompt Genişletme</div>
+                                        <div class="field-label">Prompt Geliştir</div>
                                         <label class="combo-trigger" style="cursor: pointer; justify-content: space-between; padding-right: 8px;">
                                             <span class="combo-value" style="font-size: 12px; color: var(--muted);">Otomatik</span>
                                             <input type="checkbox" id="agnesImgPromptExpansion" class="switch-input" style="flex: 0 0 auto;">
@@ -1730,6 +1936,44 @@
                                     <div class="control-group">
                                         <label class="field-label" for="agnesImgNegative">Negatif Prompt</label>
                                         <input type="text" id="agnesImgNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık...">
+                                    </div>
+                                </div>
+
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- deAPI Video (MiniMax M3 & LTX 2.5) Ekstra Ayarlar -->
+                <div id="deapiAdvancedSection" hidden>
+                    <button type="button" class="combo-trigger adv-toggle" id="deapiAdvToggle" aria-expanded="false" aria-controls="deapiAdvPanel">
+                        <span class="combo-leading"><svg class="icon"><use href="#i-sliders"/></svg></span>
+                        <span class="combo-value">Ekstra ayarlar</span>
+                        <svg class="icon combo-chevron adv-toggle-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+                    </button>
+                    <div class="adv-panel" id="deapiAdvPanel" aria-hidden="true">
+                        <div class="adv-panel-inner">
+                            <div class="adv-panel-content">
+
+                                <div class="options-row">
+                                    <div class="control-group">
+                                        <div class="field-label">Prompt Geliştir</div>
+                                        <label class="combo-trigger" style="cursor: pointer; justify-content: space-between; padding-right: 8px;">
+                                            <span class="combo-value" style="font-size: 12px; color: var(--muted);">Otomatik</span>
+                                            <input type="checkbox" id="deapiPromptExpansion" class="switch-input" style="flex: 0 0 auto;">
+                                        </label>
+                                    </div>
+
+                                    <div class="control-group">
+                                        <label class="field-label" for="deapiSeed">Seed</label>
+                                        <input type="number" id="deapiSeed" class="adv-seed" placeholder="Rastgele" min="0" max="99999999" inputmode="numeric">
+                                    </div>
+                                </div>
+
+                                <div class="options-row" style="margin-top: 4px;">
+                                    <div class="control-group" style="width: 100%;">
+                                        <label class="field-label" for="deapiNegative">Negatif Prompt</label>
+                                        <input type="text" id="deapiNegative" class="adv-seed" style="text-align: left; font-size: 11.5px; width: 100%;" placeholder="örn: bulanık...">
                                     </div>
                                 </div>
 
@@ -2396,7 +2640,10 @@
             normalized === 'pop vid' ||
             normalized === 'wan 2.6 video' ||
             normalized.includes('seedance') ||
-            normalized.includes('agnes video');
+            normalized.includes('agnes video') ||
+            normalized.includes('minimax') ||
+            normalized.includes('ltx') ||
+            normalized.includes('deapi');
     }
 
     function isVideoOutput(url, model, explicitType = '') {
@@ -2483,6 +2730,20 @@
         'blend',
         value => { selectedAgnesImgStrength = value; }
     );
+
+    let selectedDeapiFps = '24';
+    const deapiFpsCombo = $('deapiFpsCombo') ? new StudioCombo(
+        'deapiFpsCombo',
+        'deapiFpsLabel',
+        'film',
+        value => { selectedDeapiFps = value; }
+    ) : null;
+
+    let selectedDeapiAudioFile = null;
+    let selectedDeapiVideoFile = null;
+    let selectedStartFrameFile = null;
+    let selectedEndFrameFile = null;
+    let currentRefMode = 'gallery'; // 'gallery', 'frames', 'media'
 
     function stringOptions(values) {
         return Array.isArray(values)
@@ -2591,6 +2852,50 @@
                 label: strengthLabels[String(val)] || val
             }));
             selectedAgnesImgStrength = agnesImgStrengthCombo.setItems(items, selectedAgnesImgStrength || String(extra.strength || '0.75'));
+        }
+
+        // deAPI Video (MiniMax M3 Video & LTX 2.5 Video) advanced settings & reference mode tabs visibility
+        const isMiniMax = selectedModel === 'MiniMax M3 Video';
+        const isLtx = selectedModel === 'LTX 2.5 Video';
+        const isDeapiVideo = isMiniMax || isLtx;
+
+        const refTabsElem = $('refModeTabs');
+        if (isLtx) {
+            // LTX 2.5 deAPI'de SADECE Keyframe (Start / End) karelerini destekler.
+            // Bu sebeple galeri veya medya sekmeleri gizlenir, doğrudan Start & End karesi alanı açılır.
+            if (refTabsElem) refTabsElem.style.display = 'none';
+            setRefMode('frames');
+        } else if (isMiniMax) {
+            // MiniMax hem Galeri (1-3 resim), hem Start/End, hem de Medya (Ses & Video) destekler.
+            if (refTabsElem) {
+                refTabsElem.style.display = 'flex';
+                if ($('refTabGallery')) $('refTabGallery').style.display = '';
+                if ($('refTabFrames')) $('refTabFrames').style.display = '';
+                if ($('refTabMedia')) $('refTabMedia').style.display = '';
+            }
+        } else {
+            // Diğer tüm modeller (Wan, Agnes vb.) standart referans görsel modunu kullanır
+            if (refTabsElem) refTabsElem.style.display = 'none';
+            if (currentRefMode !== 'gallery') {
+                setRefMode('gallery');
+            }
+        }
+
+        if ($('deapiAdvancedSection')) {
+            $('deapiAdvancedSection').hidden = !isDeapiVideo;
+            if (!isDeapiVideo) {
+                $('deapiAdvToggle')?.setAttribute('aria-expanded', 'false');
+                $('deapiAdvPanel')?.setAttribute('aria-hidden', 'true');
+            } else if (config.extra_settings && deapiFpsCombo && config.extra_settings.fps_options) {
+                const extra = config.extra_settings;
+                const fpsOptions = extra.fps_options;
+                const fpsLabels = extra.fps_labels || {};
+                const items = fpsOptions.map(val => ({
+                    value: String(val),
+                    label: (fpsLabels[String(val)] || `${val} FPS`).replace(/\s*\([^)]*\)/g, '').trim()
+                }));
+                selectedDeapiFps = deapiFpsCombo.setItems(items, selectedDeapiFps || String(extra.fps || '24'));
+            }
         }
 
         $('generateBtn').disabled =
@@ -2780,17 +3085,20 @@
             return;
         }
 
-        const room = 3 - uploadedFiles.length;
+        const extraMedia = (selectedModel === 'MiniMax M3 Video') ?
+            ((selectedDeapiAudioFile || ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim()) ? 1 : 0) +
+             (selectedDeapiVideoFile || ($('deapiVideoUrl') && $('deapiVideoUrl').value.trim()) ? 1 : 0)) : 0;
+        const room = 3 - (uploadedFiles.length + extraMedia);
 
         if (room <= 0) {
-            toast('En fazla 3 referans görsel ekleyebilirsiniz.', true);
+            toast('En fazla 3 referans medya (görsel + video + ses) ekleyebilirsiniz.', true);
             return;
         }
 
         uploadedFiles.push(...files.slice(0, room));
 
         if (files.length > room) {
-            toast(`Yalnızca ilk ${room} görsel eklendi. Referans sınırı 3.`, true);
+            toast(`Yalnızca ilk ${room} görsel eklendi. Toplam referans sınırı 3.`, true);
         }
 
         renderPreviews();
@@ -2804,7 +3112,7 @@
 
         $('dropzone').hidden = uploadedFiles.length > 0;
         container.hidden = uploadedFiles.length === 0;
-        $('uploadCount').textContent = `${uploadedFiles.length} / 3`;
+        updateRefCounter();
 
         uploadedFiles.forEach((file, index) => {
             const tile = document.createElement('div');
@@ -2835,7 +3143,11 @@
             container.append(tile);
         });
 
-        if (uploadedFiles.length > 0 && uploadedFiles.length < 3) {
+        const extraMedia = (selectedModel === 'MiniMax M3 Video') ?
+            ((selectedDeapiAudioFile || ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim()) ? 1 : 0) +
+             (selectedDeapiVideoFile || ($('deapiVideoUrl') && $('deapiVideoUrl').value.trim()) ? 1 : 0)) : 0;
+
+        if (uploadedFiles.length > 0 && (uploadedFiles.length + extraMedia) < 3) {
             const add = document.createElement('button');
             add.type = 'button';
             add.className = 'reference-tile reference-add';
@@ -2894,6 +3206,239 @@
         if (event.dataTransfer?.files.length) {
             handleFiles(event.dataTransfer.files);
         }
+    });
+
+    // Reference Mode Helpers & Counter
+    function getRefMediaCount() {
+        const imgCount = uploadedFiles.length;
+        const audioCount = (selectedDeapiAudioFile || ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim())) ? 1 : 0;
+        const videoCount = (selectedDeapiVideoFile || ($('deapiVideoUrl') && $('deapiVideoUrl').value.trim())) ? 1 : 0;
+        return {
+            imgCount,
+            audioCount,
+            videoCount,
+            total: imgCount + audioCount + videoCount
+        };
+    }
+
+    function updateRefCounter() {
+        const countSpan = $('uploadCount');
+        const titleSpan = $('refAreaTitle');
+        if (!countSpan) return;
+
+        if (currentRefMode === 'frames' || selectedModel === 'LTX 2.5 Video') {
+            if (titleSpan) titleSpan.textContent = 'Start & End karesi';
+            const kfCount = (selectedStartFrameFile ? 1 : 0) + (selectedEndFrameFile ? 1 : 0);
+            countSpan.textContent = `${kfCount} / 2`;
+        } else {
+            const { total } = getRefMediaCount();
+            if (titleSpan) {
+                titleSpan.textContent = (currentRefMode === 'media') ? 'Özel ses & medya' : 'Referans görseller';
+            }
+            countSpan.textContent = `${total} / 3`;
+        }
+    }
+
+    // Reference Mode Switching (Gallery, Start/End Frames, Audio/Video Media)
+    function setRefMode(mode) {
+        currentRefMode = mode;
+        const btnGallery = $('refTabGallery');
+        const btnFrames = $('refTabFrames');
+        const btnMedia = $('refTabMedia');
+        const viewGallery = $('refViewGallery');
+        const viewFrames = $('refViewFrames');
+        const viewMedia = $('refViewMedia');
+
+        if (btnGallery) btnGallery.classList.toggle('active', mode === 'gallery');
+        if (btnFrames) btnFrames.classList.toggle('active', mode === 'frames');
+        if (btnMedia) btnMedia.classList.toggle('active', mode === 'media');
+
+        if (viewGallery) viewGallery.hidden = (mode !== 'gallery');
+        if (viewFrames) viewFrames.hidden = (mode !== 'frames');
+        if (viewMedia) viewMedia.hidden = (mode !== 'media');
+
+        updateRefCounter();
+    }
+
+    $('refTabGallery')?.addEventListener('click', () => setRefMode('gallery'));
+    $('refTabFrames')?.addEventListener('click', () => setRefMode('frames'));
+    $('refTabMedia')?.addEventListener('click', () => setRefMode('media'));
+
+    // Start Frame Slot
+    function updateStartFrameUI() {
+        const empty = $('startFrameEmpty');
+        const prev = $('startFramePreview');
+        const img = $('startFrameImg');
+        if (selectedStartFrameFile) {
+            const url = URL.createObjectURL(selectedStartFrameFile);
+            if (img) img.src = url;
+            if (empty) empty.hidden = true;
+            if (prev) prev.hidden = false;
+        } else {
+            if (img) img.src = '';
+            if (empty) empty.hidden = false;
+            if (prev) prev.hidden = true;
+        }
+        updateRefCounter();
+    }
+
+    $('startFrameDrop')?.addEventListener('click', (e) => {
+        if (!e.target.closest('#startFrameRemove')) {
+            $('startFrameInput')?.click();
+        }
+    });
+    $('startFrameInput')?.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            selectedStartFrameFile = e.target.files[0];
+            updateStartFrameUI();
+        }
+    });
+    $('startFrameRemove')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedStartFrameFile = null;
+        if ($('startFrameInput')) $('startFrameInput').value = '';
+        updateStartFrameUI();
+    });
+
+    // End Frame Slot
+    function updateEndFrameUI() {
+        const empty = $('endFrameEmpty');
+        const prev = $('endFramePreview');
+        const img = $('endFrameImg');
+        if (selectedEndFrameFile) {
+            const url = URL.createObjectURL(selectedEndFrameFile);
+            if (img) img.src = url;
+            if (empty) empty.hidden = true;
+            if (prev) prev.hidden = false;
+        } else {
+            if (img) img.src = '';
+            if (empty) empty.hidden = false;
+            if (prev) prev.hidden = true;
+        }
+        updateRefCounter();
+    }
+
+    $('endFrameDrop')?.addEventListener('click', (e) => {
+        if (!e.target.closest('#endFrameRemove')) {
+            $('endFrameInput')?.click();
+        }
+    });
+    $('endFrameInput')?.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            selectedEndFrameFile = e.target.files[0];
+            updateEndFrameUI();
+        }
+    });
+    $('endFrameRemove')?.addEventListener('click', (e) => {
+        e.stopPropagation();
+        selectedEndFrameFile = null;
+        if ($('endFrameInput')) $('endFrameInput').value = '';
+        updateEndFrameUI();
+    });
+
+    // Media (Audio / Video) Slots
+    $('deapiAudioUploadBtn')?.addEventListener('click', () => $('deapiAudioFile')?.click());
+    $('deapiAudioFile')?.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const imgCount = uploadedFiles.length;
+            const vidCount = (selectedDeapiVideoFile || ($('deapiVideoUrl') && $('deapiVideoUrl').value.trim())) ? 1 : 0;
+            if (imgCount + vidCount >= 3) {
+                toast('En fazla 3 referans medya (görsel + video + ses) ekleyebilirsiniz.', true);
+                e.target.value = '';
+                return;
+            }
+            selectedDeapiAudioFile = e.target.files[0];
+            if ($('deapiAudioUrl')) {
+                $('deapiAudioUrl').value = selectedDeapiAudioFile.name;
+                $('deapiAudioUrl').disabled = true;
+            }
+            if ($('deapiAudioClearBtn')) $('deapiAudioClearBtn').style.display = 'inline-flex';
+            updateRefCounter();
+            renderPreviews();
+        }
+    });
+    $('deapiAudioClearBtn')?.addEventListener('click', () => {
+        selectedDeapiAudioFile = null;
+        if ($('deapiAudioFile')) $('deapiAudioFile').value = '';
+        if ($('deapiAudioUrl')) {
+            $('deapiAudioUrl').value = '';
+            $('deapiAudioUrl').disabled = false;
+        }
+        if ($('deapiAudioClearBtn')) $('deapiAudioClearBtn').style.display = 'none';
+        updateRefCounter();
+        renderPreviews();
+    });
+    $('deapiAudioUrl')?.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        if (val) {
+            const imgCount = uploadedFiles.length;
+            const vidCount = (selectedDeapiVideoFile || ($('deapiVideoUrl') && $('deapiVideoUrl').value.trim())) ? 1 : 0;
+            if (imgCount + vidCount >= 3) {
+                toast('En fazla 3 referans medya (görsel + video + ses) ekleyebilirsiniz.', true);
+                e.target.value = '';
+                if ($('deapiAudioClearBtn')) $('deapiAudioClearBtn').style.display = 'none';
+                updateRefCounter();
+                renderPreviews();
+                return;
+            }
+            if ($('deapiAudioClearBtn')) $('deapiAudioClearBtn').style.display = 'inline-flex';
+        } else {
+            if ($('deapiAudioClearBtn')) $('deapiAudioClearBtn').style.display = 'none';
+        }
+        updateRefCounter();
+        renderPreviews();
+    });
+
+    $('deapiVideoUploadBtn')?.addEventListener('click', () => $('deapiVideoFile')?.click());
+    $('deapiVideoFile')?.addEventListener('change', (e) => {
+        if (e.target.files && e.target.files[0]) {
+            const imgCount = uploadedFiles.length;
+            const audCount = (selectedDeapiAudioFile || ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim())) ? 1 : 0;
+            if (imgCount + audCount >= 3) {
+                toast('En fazla 3 referans medya (görsel + video + ses) ekleyebilirsiniz.', true);
+                e.target.value = '';
+                return;
+            }
+            selectedDeapiVideoFile = e.target.files[0];
+            if ($('deapiVideoUrl')) {
+                $('deapiVideoUrl').value = selectedDeapiVideoFile.name;
+                $('deapiVideoUrl').disabled = true;
+            }
+            if ($('deapiVideoClearBtn')) $('deapiVideoClearBtn').style.display = 'inline-flex';
+            updateRefCounter();
+            renderPreviews();
+        }
+    });
+    $('deapiVideoClearBtn')?.addEventListener('click', () => {
+        selectedDeapiVideoFile = null;
+        if ($('deapiVideoFile')) $('deapiVideoFile').value = '';
+        if ($('deapiVideoUrl')) {
+            $('deapiVideoUrl').value = '';
+            $('deapiVideoUrl').disabled = false;
+        }
+        if ($('deapiVideoClearBtn')) $('deapiVideoClearBtn').style.display = 'none';
+        updateRefCounter();
+        renderPreviews();
+    });
+    $('deapiVideoUrl')?.addEventListener('input', (e) => {
+        const val = e.target.value.trim();
+        if (val) {
+            const imgCount = uploadedFiles.length;
+            const audCount = (selectedDeapiAudioFile || ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim())) ? 1 : 0;
+            if (imgCount + audCount >= 3) {
+                toast('En fazla 3 referans medya (görsel + video + ses) ekleyebilirsiniz.', true);
+                e.target.value = '';
+                if ($('deapiVideoClearBtn')) $('deapiVideoClearBtn').style.display = 'none';
+                updateRefCounter();
+                renderPreviews();
+                return;
+            }
+            if ($('deapiVideoClearBtn')) $('deapiVideoClearBtn').style.display = 'inline-flex';
+        } else {
+            if ($('deapiVideoClearBtn')) $('deapiVideoClearBtn').style.display = 'none';
+        }
+        updateRefCounter();
+        renderPreviews();
     });
 
     let importingReference = false;
@@ -3147,6 +3692,21 @@
 
         if (job.connectionLost && !isTerminal(job.status)) {
             return 'Bağlantı bekleniyor';
+        }
+
+        if (job.status === 'queued') {
+            const lastLog = job.logs && job.logs.length ? job.logs[job.logs.length - 1] : null;
+            const msg = (typeof lastLog === 'string' ? lastLog : lastLog?.message) || '';
+            const mMatch = msg.match(/(\d+\s*sn)/i);
+            const sMatch = msg.match(/Sıra:\s*(\d+\/\d+)/i);
+            if (mMatch && sMatch) {
+                return `Sırada (${sMatch[1]} - ${mMatch[1]})`;
+            } else if (mMatch) {
+                return `Sırada (${mMatch[1]})`;
+            } else if (sMatch) {
+                return `Sırada (${sMatch[1]})`;
+            }
+            return 'Sırada';
         }
 
         return labels[job.status] || 'İşleniyor';
@@ -3480,7 +4040,14 @@
                 throw new Error('Üretim listesi geçersiz.');
             }
 
-            for (const [id, source] of Object.entries(data)) {
+            const entries = Object.entries(data);
+            entries.sort((a, b) => {
+                const tA = Number(a[1]?.created_at) || 0;
+                const tB = Number(b[1]?.created_at) || 0;
+                return tA - tB;
+            });
+
+            for (const [id, source] of entries) {
                 if (removedJobIds.has(String(id))) continue;
 
                 // New local operations must not be overwritten by an older response.
@@ -3523,13 +4090,19 @@
         }
 
         // Capture settings before the request; the user can change the UI later.
+        let filesForSnapshot = [...uploadedFiles];
+        if (currentRefMode === 'frames' || selectedModel === 'LTX 2.5 Video') {
+            filesForSnapshot = [selectedStartFrameFile, selectedEndFrameFile].filter(Boolean);
+        }
+
         const snapshot = {
             prompt,
             model: selectedModel,
             aspect_ratio: selectedRatio,
             tier: selectedTier,
             resolution: selectedResolution,
-            files: [...uploadedFiles]
+            files: filesForSnapshot,
+            refMode: (selectedModel === 'LTX 2.5 Video') ? 'frames' : currentRefMode
         };
 
         generationBusy = true;
@@ -3570,6 +4143,10 @@
                     form.append('wan_audio_file', selectedWanAudioFile);
                 } else if ($('wanAudioUrl') && $('wanAudioUrl').value.trim()) {
                     form.append('wan_audio_url', $('wanAudioUrl').value.trim());
+                } else if (selectedDeapiAudioFile) {
+                    form.append('wan_audio_file', selectedDeapiAudioFile);
+                } else if ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim()) {
+                    form.append('wan_audio_url', $('deapiAudioUrl').value.trim());
                 }
             } else if (snapshot.model === 'Agnes Video 2.0') {
                 form.append('agnes_fps', selectedAgnesFps || '24');
@@ -3589,11 +4166,59 @@
                 if ($('agnesImgSeed') && $('agnesImgSeed').value.trim()) {
                     form.append('agnes_seed', $('agnesImgSeed').value.trim());
                 }
+            } else if (snapshot.model === 'MiniMax M3 Video' || snapshot.model === 'LTX 2.5 Video') {
+                const effectiveRefMode = (snapshot.model === 'LTX 2.5 Video') ? 'frames' : currentRefMode;
+                form.append('deapi_expand', $('deapiPromptExpansion')?.checked ? 'true' : 'false');
+                form.append('ref_mode', effectiveRefMode);
+                if ($('deapiNegative') && $('deapiNegative').value.trim()) {
+                    form.append('deapi_negative', $('deapiNegative').value.trim());
+                }
+                if ($('deapiSeed') && $('deapiSeed').value.trim()) {
+                    form.append('deapi_seed', $('deapiSeed').value.trim());
+                }
+                // LTX 2.5 harici ses veya video referansı kabul etmez
+                if (snapshot.model !== 'LTX 2.5 Video') {
+                    const hasAudio = !!(selectedDeapiAudioFile || ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim()));
+                    const hasVideo = !!(selectedDeapiVideoFile || ($('deapiVideoUrl') && $('deapiVideoUrl').value.trim()));
+                    const hasImage = !!(snapshot.files && snapshot.files.length > 0);
+
+                    if (effectiveRefMode !== 'frames' && hasAudio && !hasVideo && !hasImage) {
+                        toast('deAPI Kuralı: Ses referansı tek başına kullanılamaz. Yanında en az 1 görsel veya video referansı ekleyin.', true);
+                        setGenerationBusy(false);
+                        return;
+                    }
+
+                    if (selectedDeapiAudioFile) {
+                        form.append('deapi_audio_file', selectedDeapiAudioFile);
+                    } else if ($('deapiAudioUrl') && $('deapiAudioUrl').value.trim()) {
+                        form.append('deapi_audio_url', $('deapiAudioUrl').value.trim());
+                    }
+                    if (selectedDeapiVideoFile) {
+                        form.append('deapi_video_file', selectedDeapiVideoFile);
+                    } else if ($('deapiVideoUrl') && $('deapiVideoUrl').value.trim()) {
+                        form.append('deapi_video_url', $('deapiVideoUrl').value.trim());
+                    }
+                }
             }
 
-            snapshot.files.forEach((file, index) => {
-                form.append(`image_${index + 1}`, file);
-            });
+            const sendFrames = (currentRefMode === 'frames' || snapshot.model === 'LTX 2.5 Video');
+            if (sendFrames) {
+                if (!selectedStartFrameFile && selectedEndFrameFile) {
+                    toast('Son kare belirtebilmek için lütfen önce ilk kareyi de seçin.', true);
+                    setGenerationBusy(false);
+                    return;
+                }
+                if (selectedStartFrameFile) {
+                    form.append('image_1', selectedStartFrameFile);
+                }
+                if (selectedEndFrameFile) {
+                    form.append('image_2', selectedEndFrameFile);
+                }
+            } else {
+                snapshot.files.forEach((file, index) => {
+                    form.append(`image_${index + 1}`, file);
+                });
+            }
 
             const data = await api('/api/generate/start', {
                 method: 'POST',
@@ -3605,14 +4230,27 @@
             const id = String(data.job_id);
 
             if (!jobs.has(id)) {
+                let refURL = '';
+                let referenceIsVideo = false;
+                if (sendFrames) {
+                    if (selectedStartFrameFile) {
+                        refURL = URL.createObjectURL(selectedStartFrameFile);
+                    }
+                } else if (currentRefMode === 'media') {
+                    if (selectedDeapiVideoFile) {
+                        refURL = URL.createObjectURL(selectedDeapiVideoFile);
+                        referenceIsVideo = true;
+                    }
+                } else if (snapshot.files.length) {
+                    refURL = URL.createObjectURL(snapshot.files[0]);
+                }
+
                 const job = normalizeJob(id, {
                     ...snapshot,
                     files: undefined,
                     status: 'registering',
-                    refURL: snapshot.files.length
-                        ? URL.createObjectURL(snapshot.files[0])
-                        : '',
-                    referenceIsVideo: false,
+                    refURL: refURL,
+                    referenceIsVideo: referenceIsVideo,
                     outputs: [],
                     logs: []
                 });
@@ -3735,6 +4373,12 @@
         const isExpanded = $('agnesImgAdvToggle').getAttribute('aria-expanded') === 'true';
         $('agnesImgAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
         $('agnesImgAdvPanel').setAttribute('aria-hidden', String(isExpanded));
+    });
+
+    $('deapiAdvToggle')?.addEventListener('click', () => {
+        const isExpanded = $('deapiAdvToggle').getAttribute('aria-expanded') === 'true';
+        $('deapiAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
+        $('deapiAdvPanel').setAttribute('aria-hidden', String(isExpanded));
     });
 
     $('generateBtn').addEventListener('click', triggerGeneration);
