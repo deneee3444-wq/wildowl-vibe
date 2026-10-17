@@ -192,7 +192,7 @@ def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int],
 
         t0 = time.time()
         clicked = False
-        while time.time() - t0 < 45:
+        while time.time() - t0 < 180:
             try:
                 title = page.title()
                 if "Just a moment" not in title and "Bir dakika" not in title and ("Register" in title or "deAPI" in title or "Sign" in title or "Hesap" in title):
