@@ -871,6 +871,8 @@ def run_job_in_background(job_id):
             return
         if pct is not None:
             job['pct'] = pct
+        if status in ["generating", "queued", "registering", "processing", "completed", "failed"]:
+            job['status'] = status
         now = time.time()
         lt = time.localtime(now)
         time_str = f"{lt.tm_hour:02d}:{lt.tm_min:02d}:{lt.tm_sec:02d}"
