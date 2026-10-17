@@ -58,15 +58,12 @@ import cloakbrowser
 from cloakbrowser import launch_persistent_context
 
 def _ensure_browser_binary():
-    """CloakBrowser ikili dosyasının (Chromium) Render ve Linux ortamlarında mevcut olduğunu garanti eder."""
-    try:
-        if hasattr(cloakbrowser, "ensure_binary"):
-            cloakbrowser.ensure_binary()
-    except Exception as e:
-        print(f"[!] CloakBrowser binary kontrol/indirme uyarısı: {e}", flush=True)
-
-# Uygulama ayağa kalkarken binary'yi kontrol et / indir
-_ensure_browser_binary()
+    """
+    CloakBrowser Chromium binary'si Docker build anında (Dockerfile) indirilir.
+    Runtime sırasında GitHub API 403 Rate Limit hatası alıp servisin kapanmasını
+    önlemek için burada ağ sorgusu yapılmaz.
+    """
+    pass
 
 if sys.platform == "win32":
     try:
@@ -119,12 +116,12 @@ _CACHED_CF_SESSION: Dict[str, Any] = {
 _ACCOUNT_CREATION_LOCK = threading.Lock()
 
 # ==============================================================================
-# PROXY AYARI (YALNIZCA DEAPI CLOAKBROWSER AÇILIŞ - KAPANIŞ ARASINDA KULLANILIR)
+# PROXY AYARI (RENDER VB. SUNUCULARDA CLOUDFLARE 403 ENGELİNİ AŞMAK İÇİN)
 # ------------------------------------------------------------------------------
-# PROXY_MODE: 0 -> Kapalı (Lokalde proxy açmaya gerek yoktur)
-#             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile aşımı için)
+# PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
+#             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
 PROXY_MODE = 1
-CLOAK_PROXY_URL = "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014"
+CLOAK_PROXY_URL = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 
 
 # ==============================================================================
@@ -154,7 +151,6 @@ def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int],
     print(f"[*] Cloudflare Turnstile doğrulaması için CloakBrowser başlatılıyor... (Proxy Modu: {'Açık' if PROXY_MODE == 1 else 'Kapalı'})", flush=True)
 
     os.makedirs(PROFILE_DIR, exist_ok=True)
-    _ensure_browser_binary()
 
     context_kwargs = {
         "user_data_dir": PROFILE_DIR,
@@ -191,27 +187,65 @@ def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int],
         page.goto("https://app.deapi.ai/register", wait_until="domcontentloaded")
 
         t0 = time.time()
-        clicked = False
-        while time.time() - t0 < 180:
+        last_click_time = 0
+        clicked_logged = False
+        while time.time() - t0 < 120:
             try:
                 title = page.title()
-                if "Just a moment" not in title and "Bir dakika" not in title and ("Register" in title or "deAPI" in title or "Sign" in title or "Hesap" in title):
-                    break
             except Exception:
-                pass
+                title = ""
 
-            if not clicked:
+            cookies_dict = {c["name"]: c["value"] for c in context.cookies()}
+
+            bypassed = False
+            if "Just a moment" not in title and "Bir dakika" not in title and ("Register" in title or "deAPI" in title or "Sign" in title or "Hesap" in title):
+                bypassed = True
+            elif "cf_clearance" in cookies_dict:
+                bypassed = True
+
+            if bypassed:
+                try:
+                    content = page.content()
+                    if "wire:snapshot" in content or "csrf-token" in content:
+                        break
+                except Exception:
+                    if bypassed:
+                        break
+
+            now = time.time()
+            if now - last_click_time >= 1.5:
                 for frame in page.frames:
-                    if "challenges.cloudflare.com" in frame.url:
+                    if "challenges.cloudflare.com" in frame.url or "turnstile" in frame.url:
                         try:
-                            frame.locator("body").click(timeout=1500)
-                            clicked = True
-                            if log_callback:
+                            cb = frame.locator("input[type='checkbox'], .ctp-checkbox-label, #challenge-stage")
+                            if cb.count() > 0:
+                                cb.first.click(timeout=1000)
+                            else:
+                                frame.locator("body").click(timeout=1000)
+                            last_click_time = now
+                            if log_callback and not clicked_logged:
                                 log_callback("Cloudflare Turnstile kutucuğu tıklandı, çözülüyor...", "registering", 15)
+                                clicked_logged = True
                             break
                         except Exception:
-                            pass
+                            try:
+                                frame.locator("body").click(timeout=1000)
+                                last_click_time = now
+                                break
+                            except Exception:
+                                pass
             time.sleep(1)
+
+        # Cookiebot engelini kaldır (varsa)
+        try:
+            page.evaluate("""() => {
+                const el = document.getElementById('CybotCookiebotDialog');
+                if (el) el.remove();
+                const underlay = document.getElementById('CybotCookiebotDialogBodyUnderlay');
+                if (underlay) underlay.remove();
+            }""")
+        except Exception:
+            pass
 
         time.sleep(1)
         cookies = {c["name"]: c["value"] for c in context.cookies()}
@@ -239,6 +273,8 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
             if log_callback:
                 log_callback("Mevcut Cloudflare çerezi test ediliyor...", "registering", 11)
             test_session = cffi_requests.Session(impersonate="chrome120")
+            if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
+                test_session.proxies = {"http": CLOAK_PROXY_URL.strip(), "https": CLOAK_PROXY_URL.strip()}
             test_session.cookies.update(cached_cookies)
             test_session.headers.update({
                 "user-agent": cached_ua,
@@ -276,6 +312,8 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
         log_callback("Geçici e-posta kutusu oluşturuluyor ve kayıt formu iletiliyor...", "registering", 20)
 
     session = cffi_requests.Session(impersonate="chrome120")
+    if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
+        session.proxies = {"http": CLOAK_PROXY_URL.strip(), "https": CLOAK_PROXY_URL.strip()}
     session.cookies.update(cookies)
     session.headers.update({
         "user-agent": ua,
