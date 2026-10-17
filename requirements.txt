@@ -6,3 +6,7 @@ google-auth-oauthlib
 google-auth-httplib2
 pycryptodome
 beautifulsoup4
+cloakbrowser
+curl_cffi
+Pillow
+
