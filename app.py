@@ -47,6 +47,11 @@ try:
 except ImportError:
     agnesAI = None
 
+try:
+    import deApiAI
+except ImportError:
+    deApiAI = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -54,6 +59,40 @@ try:
 except ImportError:
     # Fallback config if import fails
     MODELS_CONFIG = {
+        "MiniMax M3 Video": {
+            "model_id": "MiniMaxH3_33B_Turbo_INT8",
+            "model_slug": "MiniMaxH3_33B_Turbo_INT8",
+            "type": "video",
+            "provider": "deapi",
+            "tiers": ["5", "10"],
+            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye"},
+            "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+            "resolutions": ["768p", "720p"],
+            "resolution": "768p",
+            "extra_settings": {
+                "fps": 24,
+                "enable_prompt_expansion": False,
+                "negative_prompt": "",
+                "seed": ""
+            }
+        },
+        "LTX 2.5 Video": {
+            "model_id": "Ltx2_5_22B_Dist_INT8",
+            "model_slug": "Ltx2_5_22B_Dist_INT8",
+            "type": "video",
+            "provider": "deapi",
+            "tiers": ["5", "10"],
+            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye"},
+            "aspect_ratios": ["16:9", "9:16", "1:1", "4:3", "3:4"],
+            "resolutions": ["768p", "720p"],
+            "resolution": "768p",
+            "extra_settings": {
+                "fps": 24,
+                "enable_prompt_expansion": False,
+                "negative_prompt": "",
+                "seed": ""
+            }
+        },
         "Vibe Video": {
             "model_id": "vibe-video",
             "type": "video",
@@ -210,7 +249,7 @@ except ImportError:
             "aspect_ratios": ["1:1", "3:2", "2:3"],
             "resolution": "1K"
         },
-        "Qwen 2.1": {
+         "Qwen 2.1": {
             "model_id": "qwen-2.1",
             "tiers": ["standard", "pro", "turbo"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3"],
@@ -686,6 +725,46 @@ def start_generation():
         'strength': float(request.form.get('agnes_strength', agnes_extra_cfg.get('strength', 0.75)))
     }
 
+    # deAPI Extra parameters from request or model config defaults
+    deapi_extra_cfg = MODELS_CONFIG.get(model, {}).get("extra_settings", {})
+    deapi_audio_file = request.files.get('deapi_audio_file')
+    deapi_audio_path = None
+    if deapi_audio_file and deapi_audio_file.filename:
+        temp_dir = os.path.join(ROOT_DIR, "scratch")
+        os.makedirs(temp_dir, exist_ok=True)
+        ext = os.path.splitext(deapi_audio_file.filename)[1] or ".mp3"
+        deapi_audio_path = os.path.join(temp_dir, f"deapi_audio_{job_id}{ext}")
+        deapi_audio_file.save(deapi_audio_path)
+
+    deapi_video_file = request.files.get('deapi_video_file')
+    deapi_video_path = None
+    if deapi_video_file and deapi_video_file.filename:
+        temp_dir = os.path.join(ROOT_DIR, "scratch")
+        os.makedirs(temp_dir, exist_ok=True)
+        ext = os.path.splitext(deapi_video_file.filename)[1] or ".mp4"
+        deapi_video_path = os.path.join(temp_dir, f"deapi_video_{job_id}{ext}")
+        deapi_video_file.save(deapi_video_path)
+
+    deapi_fps = 24  # deAPI modellerinde 24 FPS zorunludur
+
+    deapi_params = {
+        'fps': deapi_fps,
+        'enable_prompt_expansion': request.form.get('deapi_expand', str(deapi_extra_cfg.get('enable_prompt_expansion', False))).lower() == 'true',
+        'negative_prompt': request.form.get('deapi_negative', deapi_extra_cfg.get('negative_prompt', '')),
+        'seed': request.form.get('deapi_seed', request.form.get('seed')),
+        'audio_url': request.form.get('deapi_audio_url', '').strip(),
+        'audio_path': deapi_audio_path,
+        'video_url': request.form.get('deapi_video_url', '').strip(),
+        'video_path': deapi_video_path,
+        'ref_mode': 'frames' if model == "LTX 2.5 Video" else request.form.get('ref_mode', 'gallery')
+    }
+
+    if model == "LTX 2.5 Video":
+        deapi_params['audio_url'] = ''
+        deapi_params['audio_path'] = None
+        deapi_params['video_url'] = ''
+        deapi_params['video_path'] = None
+
     # Store parameters & files directly in RAM dict
     ACTIVE_JOBS[job_id] = {
         'prompt': prompt,
@@ -697,6 +776,7 @@ def start_generation():
         'images': memory_images,
         'wan_params': wan_params,
         'agnes_params': agnes_params,
+        'deapi_params': deapi_params,
         'created_at': time.time(),
         'status': 'registering',
         'pct': 0,
@@ -1377,6 +1457,104 @@ def run_job_in_background(job_id):
                             except Exception:
                                 pass
                 return
+
+        # DEAPI VIDEO HANDLER (MiniMax M3 Video & LTX 2.5 Video)
+        if model_name in ["MiniMax M3 Video", "LTX 2.5 Video"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "deapi"):
+            if not deApiAI:
+                add_log("deAPI AI modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'deAPI AI modülü bulunamadı.'
+                return
+
+            model_cfg = MODELS_CONFIG.get(model_name, {})
+            model_slug = model_cfg.get("model_slug") or model_cfg.get("model_id", "MiniMaxH3_33B_Turbo_INT8")
+            add_log(f"deAPI ({model_name}) video motoru hazırlanıyor...", "registering", 5)
+
+            temp_img_paths = []
+            for idx, img_data in enumerate(images[:3]):
+                ext = ".jpg"
+                if "png" in img_data.get("content_type", "").lower():
+                    ext = ".png"
+                temp_dir = os.path.join(ROOT_DIR, "scratch")
+                os.makedirs(temp_dir, exist_ok=True)
+                t_path = os.path.join(temp_dir, f"deapi_vid_ref_{job_id}_{idx}{ext}")
+                with open(t_path, "wb") as f:
+                    f.write(img_data['content'])
+                temp_img_paths.append(t_path)
+
+            try:
+                duration_choice = tier if tier in ["5", "10"] else "5"
+                res_choice = resolution if resolution in ["768p", "720p"] else "768p"
+                ar_choice = aspect_ratio or "16:9"
+
+                deapi_p = job.get('deapi_params') or {}
+                is_ltx_model = "ltx" in model_slug.lower() or model_name == "LTX 2.5 Video"
+                res = deApiAI.run_video(
+                    prompt=prompt,
+                    images=temp_img_paths,
+                    aspect_ratio=ar_choice,
+                    duration=duration_choice,
+                    resolution=res_choice,
+                    model=model_slug,
+                    negative_prompt=deapi_p.get('negative_prompt', ""),
+                    enhance_prompt=bool(deapi_p.get('enable_prompt_expansion', False)),
+                    seed=deapi_p.get('seed'),
+                    fps=deapi_p.get('fps'),
+                    audio_path=None if is_ltx_model else deapi_p.get('audio_path'),
+                    audio_url="" if is_ltx_model else deapi_p.get('audio_url'),
+                    video_path=None if is_ltx_model else deapi_p.get('video_path'),
+                    video_url="" if is_ltx_model else deapi_p.get('video_url'),
+                    ref_mode="frames" if is_ltx_model else deapi_p.get('ref_mode', 'gallery'),
+                    log_callback=add_log,
+                    job_id=job_id,
+                    is_active=lambda: job_id in ACTIVE_JOBS
+                )
+                output_url = res.get("output")
+                if output_url:
+                    item = {
+                        'id': uuid.uuid4().hex,
+                        'url': output_url,
+                        'prompt': prompt,
+                        'model': model_name,
+                        'aspect_ratio': ar_choice,
+                        'tier': duration_choice,
+                        'resolution': res_choice,
+                        'type': "video",
+                        'request_id': res.get('request_id'),
+                        'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                    }
+                    GENERATION_HISTORY.insert(0, item)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                        ACTIVE_JOBS[job_id]['status'] = 'completed'
+                else:
+                    raise RuntimeError("deAPI Video üretimi URL üretmedi.")
+            except Exception as d_err:
+                add_log(f"deAPI Video Hatası: {str(d_err)}", "error", 90)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = str(d_err)
+            finally:
+                for p in temp_img_paths:
+                    if os.path.exists(p):
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+                a_path = (job.get('deapi_params') or {}).get('audio_path')
+                if a_path and os.path.exists(a_path):
+                    try:
+                        os.remove(a_path)
+                    except Exception:
+                        pass
+                v_path = (job.get('deapi_params') or {}).get('video_path')
+                if v_path and os.path.exists(v_path):
+                    try:
+                        os.remove(v_path)
+                    except Exception:
+                        pass
+            return
         
         # Step 1: E-posta oluşturma ve kayıt
         add_log("Spamok API üzerinden geçici e-posta alınıyor...", "registering", 10)
@@ -1726,6 +1904,7 @@ def get_active_jobs():
             'user_id': job.get('user_id'),
             'id_token': job.get('id_token'),
             'is_extend': job.get('is_extend', False),
+            'created_at': job.get('created_at', 0),
             'error': job.get('error')
         }
     return jsonify(active_list)
