@@ -118,6 +118,14 @@ _CACHED_CF_SESSION: Dict[str, Any] = {
 
 _ACCOUNT_CREATION_LOCK = threading.Lock()
 
+# ==============================================================================
+# PROXY AYARI (YALNIZCA DEAPI CLOAKBROWSER AÇILIŞ - KAPANIŞ ARASINDA KULLANILIR)
+# ------------------------------------------------------------------------------
+# PROXY_MODE: 0 -> Kapalı (Lokalde proxy açmaya gerek yoktur)
+#             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile aşımı için)
+PROXY_MODE = 0
+CLOAK_PROXY_URL = "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014"
+
 
 # ==============================================================================
 # 1. CLOAKBROWSER CLOUDFLARE CLEARANCE & YENİ HESAP AÇMA MOTORU
@@ -139,20 +147,35 @@ def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int],
     """
     Tarayıcıyı (CloakBrowser) sadece Cloudflare Turnstile'ı çözüp giriş çerezlerini
     almak için kısa süreli çalıştırır ve HEMEN KAPATIR.
+    Proxy ayarı (PROXY_MODE=1 ise) yalnızca tarayıcı açık kaldığı süre boyunca devrededir.
     """
     if log_callback:
         log_callback("Cloudflare Turnstile doğrulaması için CloakBrowser açılıyor...", "registering", 12)
-    print("[*] Cloudflare Turnstile doğrulaması için CloakBrowser başlatılıyor...", flush=True)
+    print(f"[*] Cloudflare Turnstile doğrulaması için CloakBrowser başlatılıyor... (Proxy Modu: {'Açık' if PROXY_MODE == 1 else 'Kapalı'})", flush=True)
 
     os.makedirs(PROFILE_DIR, exist_ok=True)
     _ensure_browser_binary()
-    context = launch_persistent_context(
-        user_data_dir=PROFILE_DIR,
-        headless=True,
-        humanize=True,
-        stealth_args=True,
-        args=["--disable-infobars", "--no-first-run", "--window-size=1920,1080"],
-    )
+
+    context_kwargs = {
+        "user_data_dir": PROFILE_DIR,
+        "headless": True,
+        "humanize": True,
+        "stealth_args": True,
+        "args": [
+            "--disable-infobars",
+            "--no-first-run",
+            "--no-default-browser-check",
+            "--window-size=1920,1080",
+            "--disable-dev-shm-usage",
+            "--no-sandbox",
+        ],
+    }
+
+    # Proxy yalnızca CloakBrowser oturumunda kullanılır
+    if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
+        context_kwargs["proxy"] = CLOAK_PROXY_URL.strip()
+
+    context = launch_persistent_context(**context_kwargs)
 
     try:
         # Önceki login çerezlerini temizle
@@ -169,10 +192,10 @@ def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int],
 
         t0 = time.time()
         clicked = False
-        while time.time() - t0 < 30:
+        while time.time() - t0 < 45:
             try:
                 title = page.title()
-                if "Just a moment" not in title and "Bir dakika" not in title:
+                if "Just a moment" not in title and "Bir dakika" not in title and ("Register" in title or "deAPI" in title or "Sign" in title or "Hesap" in title):
                     break
             except Exception:
                 pass
@@ -740,18 +763,18 @@ def run_video(
                 bucket.mark_failed_or_skipped(slot_idx)
                 raise RuntimeError(f"deAPI bağlantı hatası: {net_err}")
 
-            # 429 Rate Limit (RPM 1) Kontrolü
+            # 429 Rate Limit (1 RPM) Kontrolü
             if resp.status_code == 429:
                 retry_after = int(resp.headers.get("Retry-After", 20))
                 if retry_after <= 0:
                     retry_after = 20
-                rem = retry_after
+                rem = min(retry_after, 60)
                 while rem > 0:
                     if is_active and not is_active():
                         bucket.mark_failed_or_skipped(slot_idx)
                         return {"error": "İşlem iptal edildi."}
                     if log_callback:
-                        log_callback(f"deAPI Hız Sınırı (429 - 1 RPM). {rem} sn bekleniyor...", "warning", 32)
+                        log_callback(f"deAPI 1 RPM hız sınırı korunuyor ({rem} sn)...", "warning", 32)
                     st = min(2, rem)
                     time.sleep(st)
                     rem -= st
@@ -771,7 +794,7 @@ def run_video(
                 if request_id:
                     bucket.mark_dispatched(slot_idx)
                     if log_callback:
-                        log_callback(f"İş deAPI kuyruğuna alındı (ID: {request_id[:8]}...). Anahtar #{bucket.bucket_id} (Kullanım: {slot_idx + 1}/{bucket.max_slots})", "info", 35)
+                        log_callback(f"İş deAPI GPU kuyruğuna alındı (ID: {request_id[:8]}...). Anahtar #{bucket.bucket_id} (Kullanım: {slot_idx + 1}/{bucket.max_slots})", "generating", 35)
                     break
 
             # Diğer hatalar (422 vb.)
@@ -799,9 +822,13 @@ def run_video(
     poll_url = f"{BASE_URL}/jobs/{request_id}"
     start_poll_time = time.time()
     last_reported_pct = 35
+    last_heartbeat_time = time.time()
 
     while True:
         time.sleep(3)
+        now_t = time.time()
+        elapsed_total = int(now_t - start_poll_time)
+
         try:
             r_poll = requests.get(
                 poll_url,
@@ -818,6 +845,11 @@ def run_video(
                     last_reported_pct = calc_pct
                     if log_callback:
                         log_callback(f"Video kareleri üretiliyor (%{int(progress)})...", "generating", last_reported_pct)
+                elif progress == 0.0 and (now_t - last_heartbeat_time >= 8):
+                    # Progress %0 iken (GPU sırası beklenirken) kullanıcının dondu sanmaması için canlı kalp atışı
+                    last_heartbeat_time = now_t
+                    if log_callback:
+                        log_callback(f"deAPI GPU kuyruğu işleniyor ({elapsed_total} sn)...", "generating", 35)
 
                 if status == "done":
                     if log_callback:
