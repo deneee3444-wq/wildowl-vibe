@@ -123,7 +123,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # ------------------------------------------------------------------------------
 # PROXY_MODE: 0 -> Kapalı (Lokalde proxy açmaya gerek yoktur)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile aşımı için)
-PROXY_MODE = 1
+PROXY_MODE = 0
 CLOAK_PROXY_URL = "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014"
 
 
