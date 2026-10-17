@@ -4,21 +4,35 @@
 ================================================================================
 🎬 deAPI AI Video İstemci Modülü & Otomatik Hesap Havuzu (deAPI.ai) 🎬
 ================================================================================
-Desteklenen Modeller:
-  - MiniMax M3 Video: MiniMaxH3_33B_Turbo_INT8
-  - LTX 2.5 Video: Ltx2_5_22B_Dist_INT8
+deAPI VİDEO KURALLARI & NORMALİZASYON DEĞERLERİ (ÖZET REFERANS):
+--------------------------------------------------------------------------------
+1. FPS Kuralı:
+   - Kesinlikle ve sadece 24 FPS zorunludur (MiniMax & LTX 2.5).
+   - 5 Saniye: MiniMax = 124 kare, LTX 2.5 = 120 kare.
+   - 10 Saniye: MiniMax = 243 kare, LTX 2.5 = 241 kare.
 
-Özellikler:
-  1. Yalnızca video isteği yapıldığında ve yeni anahtar gerekiyorsa tarayıcı (CloakBrowser)
-     açılır, Cloudflare Turnstile'ı çözer, çerezleri alır ve hemen kapanır.
-  2. 1 API anahtarı tam 3 başarılı video üretiminde kullanılır. 3 kullanım dolduğunda
-     otomatik olarak yeni hesap açılır.
-  3. Token/Anahtar bayatlarsa veya hata (401/403) verirse otomatik olarak tarayıcı
-     açılıp yeni anahtar temin edilir.
-  4. RPM 1 hız sınırı (429) durumunda kullanım sayacından kesinlikle düşülmez;
-     Retry-After süresi kadar beklenip güvenle tekrar denenir.
-  5. Çözünürlük ve süreler normalize edilmiştir (Maksimum 1344x768 piksel ve 1.032.192 piksel sınırı).
-  6. Arayüz için zengin, adım adım Türkçe loglama (log_callback).
+2. Çözünürlük ve Boyut Sınırları:
+   - Maksimum kenar: 1344 px.
+   - Maksimum piksel alanı: 1344 x 768 = 1.032.192 px (bu alanı aşamaz).
+   - Normalizasyon Değerleri (768p Standart):
+     * 16:9 -> 1344 x 768 (veya 1024 x 576)
+     * 9:16 -> 768 x 1344 (veya 576 x 1024)
+     * 1:1  -> 768 x 768
+     * 4:3  -> 1024 x 768
+     * 3:4  -> 768 x 1024
+     * 21:9 -> 1344 x 576
+
+3. Model Limitleri & RPD (Requests Per Day):
+   - Hız Sınırı: Her iki modelde de 1 RPM (dakikada 1 istek).
+   - MiniMax M3: RPD = 3 (Hesap başına günlük 3 video).
+   - LTX 2.5:    RPD = 15 (Hesap başına günlük 15 video), payload'da steps: 1 zorunludur.
+
+4. Medya Referans Kuralları:
+   - MiniMax M3: En fazla 3 referans medya (görsel + video + ses <= 3).
+     * Görsel maks 3 (ref_images[0..2]), Video maks 1 (ref_videos[0]), Ses maks 1 (ref_audios[0]).
+     * Ses referansı tek başına verilemez (yanında en az 1 görsel veya video şart).
+   - LTX 2.5: Sadece Start veya Start+End Keyframe kabul eder. Harici ses veya video referansı almaz.
+   - Keyframe modu (first_frame_image / last_frame_image) ile Full-Reference modu birbirini dışlar.
 ================================================================================
 """
 
@@ -75,7 +89,7 @@ MODEL_SLUGS = {
     "Ltx2_5_22B_Dist_INT8": "Ltx2_5_22B_Dist_INT8"
 }
 
-# Çözünürlük ve Oran Tablosu (Maksimum 1344 piksel genişlik, 1.032.192 maks piksel, 64'ün katları)
+# Çözünürlük Normalizasyon Değerleri (Maksimum 1344x768, 1.032.192 maks piksel alanı)
 RESOLUTION_TABLE = {
     "16:9": {"width": 1344, "height": 768},
     "9:16": {"width": 768, "height": 1344},
@@ -85,7 +99,7 @@ RESOLUTION_TABLE = {
     "21:9": {"width": 1344, "height": 576}
 }
 
-# 720p / Düşük çözünürlük alternatifi
+# 720p / Düşük çözünürlük alternatifleri
 RESOLUTION_TABLE_720P = {
     "16:9": {"width": 1024, "height": 576},
     "9:16": {"width": 576, "height": 1024},
@@ -391,21 +405,26 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
 
 class KeyBucket:
     """
-    Her bir deAPI hesabını/anahtarını ve onun en fazla 3 görevlik kullanım slotunu yönetir.
+    Her bir deAPI hesabını/anahtarını ve model RPD kotasına göre (MiniMax: 3, LTX: 15) slotlarını yönetir.
     - Slot 0 (1. İşlem): Hemen başlar (cooldown yoksa).
-    - Slot 1 (2. İşlem): Slot 0'ın API'ye iletilmesini bekler, ardından bu anahtarın 1 RPM (60 sn) cooldown'ını bekler.
-    - Slot 2 (3. İşlem): Slot 1'in API'ye iletilmesini bekler, ardından bu anahtarın 1 RPM (60 sn) cooldown'ını bekler.
+    - Slot 1+ (Sıradaki İşlemler): Önceki slotun API'ye iletilmesini bekler, ardından 1 RPM (60 sn) cooldown'ını bekler.
     """
-    def __init__(self, bucket_id: int):
+    def __init__(self, bucket_id: int, max_slots: int = 3):
         self.bucket_id = bucket_id
+        self.max_slots = max_slots
         self.api_key: Optional[str] = None
         self.key_lock = threading.Lock()
         self.created_at = time.time()
         self.last_dispatch_time = 0.0
         self.slots_assigned = 0
-        self.slots_dispatched = [False, False, False]
-        self.dispatched_events = [threading.Event(), threading.Event(), threading.Event()]
+        self.dispatched_events: Dict[int, threading.Event] = {}
         self.slots_lock = threading.Lock()
+
+    def get_event(self, slot_idx: int) -> threading.Event:
+        with self.slots_lock:
+            if slot_idx not in self.dispatched_events:
+                self.dispatched_events[slot_idx] = threading.Event()
+            return self.dispatched_events[slot_idx]
 
     def get_api_key(self, force_new: bool = False, log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
         with self.key_lock:
@@ -421,27 +440,22 @@ class KeyBucket:
 
     def mark_dispatched(self, slot_idx: int):
         with self.slots_lock:
-            if 0 <= slot_idx < len(self.slots_dispatched):
-                self.slots_dispatched[slot_idx] = True
-                self.last_dispatch_time = time.time()
-                self.dispatched_events[slot_idx].set()
+            self.last_dispatch_time = time.time()
+            self.get_event(slot_idx).set()
 
     def mark_failed_or_skipped(self, slot_idx: int):
         """Eğer bir slot hata alırsa veya iptal edilirse sonraki slotların kilitlenmemesi için sinyal verir."""
         with self.slots_lock:
-            if 0 <= slot_idx < len(self.slots_dispatched):
-                self.slots_dispatched[slot_idx] = True
-                self.dispatched_events[slot_idx].set()
+            self.get_event(slot_idx).set()
 
 
 class DeApiKeyManager:
     """
-    Tüm gelen deAPI işlerini 3'erli paketler (KeyBucket) halinde yönetir.
-    - 1., 2. ve 3. işler Anahtar 1'e atanır. Kendi aralarında sırayla 1 RPM (60 sn) beklerler.
-    - 4. iş geldiğinde (3 kotası dolduğu için) hemen Anahtar 2 açılır ve Anahtar 2'nin ilk işlemi
-      olarak beklemeden doğrudan başlar!
-    - 5. ve 6. işler Anahtar 2'ye atanır ve Anahtar 2'nin 1 RPM sırasını bekler.
-    - 7. iş Anahtar 3'ü başlatır...
+    Tüm gelen deAPI işlerini model RPD kotalarına göre paketler (KeyBucket) halinde yönetir:
+    - MiniMax M3: RPD = 3 (1 anahtar ile en fazla 3 video)
+    - LTX 2.5:    RPD = 15 (1 anahtar ile en fazla 15 video)
+    - Her iki modelde de 1 RPM (60 sn) hız sınırı korunur.
+    - Kota dolduğunda sıradaki görev beklemeden hemen yeni anahtar başlatır.
     """
     def __init__(self):
         self.lock = threading.Lock()
@@ -449,15 +463,24 @@ class DeApiKeyManager:
         self.current_bucket: Optional[KeyBucket] = None
         self.bucket_counter = 0
 
-    def assign_slot(self, job_id: str) -> Tuple[KeyBucket, int]:
+    def assign_slot(self, job_id: str, model_slug: str = "") -> Tuple[KeyBucket, int]:
+        is_ltx = "ltx" in model_slug.lower()
+        limit = 15 if is_ltx else 3
         with self.lock:
-            if self.current_bucket is None or self.current_bucket.slots_assigned >= 3:
+            if self.current_bucket is None or self.current_bucket.slots_assigned >= self.current_bucket.max_slots:
                 self.bucket_counter += 1
-                new_bucket = KeyBucket(self.bucket_counter)
+                new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
                 self.buckets.append(new_bucket)
                 self.current_bucket = new_bucket
 
             bucket = self.current_bucket
+            if bucket.slots_assigned >= limit:
+                self.bucket_counter += 1
+                new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
+                self.buckets.append(new_bucket)
+                self.current_bucket = new_bucket
+                bucket = new_bucket
+
             slot_idx = bucket.slots_assigned
             bucket.slots_assigned += 1
             return bucket, slot_idx
@@ -605,8 +628,8 @@ def run_video(
 
     is_animation = bool(valid_images or has_audio_file or has_video_file)
 
-    # 3 Kullanımlık Anahtar Paketinden Slot Tahsisi (1 Key = 3 İşlem, 4. İşlem = Yeni Anahtar)
-    bucket, slot_idx = KEY_MANAGER.assign_slot(job_id or str(time.time()))
+    # Model RPD Kotasına göre (MiniMax: 3, LTX: 15) Slot Tahsisi
+    bucket, slot_idx = KEY_MANAGER.assign_slot(job_id or str(time.time()), model_slug)
 
     if log_callback:
         mode_desc = []
@@ -621,7 +644,7 @@ def run_video(
                 mode_desc.append("Ses")
         
         mode_str = " + ".join(mode_desc) if mode_desc else "Metinden Video (Text-to-Video)"
-        log_callback(f"deAPI motoru hazırlanıyor: {model} ({mode_str}, {width}x{height} px, {duration}s, {actual_fps} FPS) [Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/3]...", "registering", 5)
+        log_callback(f"deAPI motoru hazırlanıyor: {model} ({mode_str}, {width}x{height} px, {duration}s, {actual_fps} FPS) [Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots}]...", "registering", 5)
 
     request_id = None
     api_key = None
@@ -629,13 +652,13 @@ def run_video(
         # 1. Eğer bu anahtarda önceki bir slot varsa onun deAPI'ye isteği göndermesini bekle
         if slot_idx > 0:
             prev_slot = slot_idx - 1
-            while not bucket.dispatched_events[prev_slot].is_set():
+            while not bucket.get_event(prev_slot).is_set():
                 if is_active and not is_active():
                     bucket.mark_failed_or_skipped(slot_idx)
                     return {"error": "İşlem iptal edildi."}
                 if log_callback:
-                    log_callback(f"Önceki deAPI video işleminin gönderimi bekleniyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/3)...", "queued", 10)
-                bucket.dispatched_events[prev_slot].wait(timeout=2.0)
+                    log_callback(f"Önceki deAPI video işleminin gönderimi bekleniyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots})...", "queued", 10)
+                bucket.get_event(prev_slot).wait(timeout=2.0)
 
         # 2. Bu anahtarın 1 RPM (60 saniye) hız sınırı koruması
         while True:
@@ -649,7 +672,7 @@ def run_video(
                 break
             wait_sec = int(math.ceil(needed_wait))
             if log_callback:
-                log_callback(f"deAPI 1 RPM hız sınırı korunuyor: İşlem {wait_sec} sn sonra iletilecek... (Sıra: {slot_idx + 1}/3)", "queued", 15)
+                log_callback(f"deAPI 1 RPM hız sınırı korunuyor: İşlem {wait_sec} sn sonra iletilecek... (Sıra: {slot_idx + 1}/{bucket.max_slots})", "queued", 15)
             step = min(2.0, max(0.5, needed_wait))
             time.sleep(step)
 
@@ -668,7 +691,7 @@ def run_video(
             }
 
             if log_callback:
-                log_callback(f"Video üretim isteği deAPI sunucusuna gönderiliyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/3)...", "registering", 30)
+                log_callback(f"Video üretim isteği deAPI sunucusuna gönderiliyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots})...", "registering", 30)
 
             try:
                 if is_animation:
@@ -748,7 +771,7 @@ def run_video(
                 if request_id:
                     bucket.mark_dispatched(slot_idx)
                     if log_callback:
-                        log_callback(f"İş deAPI kuyruğuna alındı (ID: {request_id[:8]}...). Anahtar #{bucket.bucket_id} (Kullanım: {slot_idx + 1}/3)", "info", 35)
+                        log_callback(f"İş deAPI kuyruğuna alındı (ID: {request_id[:8]}...). Anahtar #{bucket.bucket_id} (Kullanım: {slot_idx + 1}/{bucket.max_slots})", "info", 35)
                     break
 
             # Diğer hatalar (422 vb.)
