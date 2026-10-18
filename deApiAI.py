@@ -120,7 +120,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # ------------------------------------------------------------------------------
 # PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
-PROXY_MODE = 1
+PROXY_MODE = int(os.environ.get("PROXY_MODE", "1"))
 CLOAK_PROXY_URL = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 
 
@@ -144,7 +144,7 @@ def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int],
     """
     Tarayıcıyı (CloakBrowser) sadece Cloudflare Turnstile'ı çözüp giriş çerezlerini
     almak için kısa süreli çalıştırır ve HEMEN KAPATIR.
-    Proxy ayarı (PROXY_MODE=1 ise) yalnızca tarayıcı açık kaldığı süre boyunca devrededir.
+    Render 512 MB RAM ve 0.1 vCPU optimizasyonu: Düşük çözünürlük (800x600) ve minimal bayraklar.
     """
     if log_callback:
         log_callback("Cloudflare Turnstile doğrulaması için CloakBrowser açılıyor...", "registering", 12)
@@ -161,9 +161,16 @@ def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int],
             "--disable-infobars",
             "--no-first-run",
             "--no-default-browser-check",
-            "--window-size=1920,1080",
+            "--window-size=800,600",
             "--disable-dev-shm-usage",
             "--no-sandbox",
+            "--disable-gpu",
+            "--disable-software-rasterizer",
+            "--disable-extensions",
+            "--disable-background-networking",
+            "--disable-default-apps",
+            "--mute-audio",
+            "--no-zygote",
         ],
     }
 
@@ -461,14 +468,19 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
 
 
 # ==============================================================================
-# 2. ÇOKLU ANAHTAR HAVUZU & 3 KULLANIMLIK SLOT YÖNETİMİ
+# 2. ÇOKLU HESAP HAVUZU & PARALEL GPU YÖNETİMİ (1 GPU CONCURRENCY PER ACCOUNT)
 # ==============================================================================
 
 class KeyBucket:
     """
-    Her bir deAPI hesabını/anahtarını ve model RPD kotasına göre (MiniMax: 3, LTX: 15) slotlarını yönetir.
-    - Slot 0 (1. İşlem): Hemen başlar (cooldown yoksa).
-    - Slot 1+ (Sıradaki İşlemler): Önceki slotun API'ye iletilmesini bekler, ardından 1 RPM (60 sn) cooldown'ını bekler.
+    Her bir deAPI hesabını/anahtarını yönetir:
+    - deAPI Kuralı: Tek bir ücretsiz deAPI hesabı aynı anda SADECE 1 GPU GÖREVİ işleyebilir!
+    - Eğer bir hesap GPU'da video üretirken (active_gpu_jobs > 0) 2. bir görev gönderilirse,
+      deAPI 2. görevi kuyrukta (progress: 0.0) tam 205 saniye BEKLETİR!
+    - Bu nedenle:
+      * active_gpu_jobs > 0 iken BU HESABA ASLA YENİ GÖREV ATANMAZ!
+      * Eşzamanlı gelen tüm görevler anında bağımsız yeni hesaplarda eşzamanlı (paralel) başlar!
+      * Hesap sadece GPU'su BOŞTA ise ve 60 sn (1 RPM) geçmişse tekrar kullanılır (MiniMax: 3, LTX: 15 kota).
     """
     def __init__(self, bucket_id: int, max_slots: int = 3):
         self.bucket_id = bucket_id
@@ -477,78 +489,75 @@ class KeyBucket:
         self.key_lock = threading.Lock()
         self.created_at = time.time()
         self.last_dispatch_time = 0.0
-        self.slots_assigned = 0
-        self.dispatched_events: Dict[int, threading.Event] = {}
-        self.slots_lock = threading.RLock()
+        self.used_count = 0
+        self.active_gpu_jobs = 0
+        self.lock = threading.RLock()
 
-    def get_event(self, slot_idx: int) -> threading.Event:
-        with self.slots_lock:
-            if slot_idx not in self.dispatched_events:
-                self.dispatched_events[slot_idx] = threading.Event()
-            return self.dispatched_events[slot_idx]
+    def can_accept(self) -> bool:
+        with self.lock:
+            # 1. Günlük kota kontrolü (MiniMax: 3, LTX: 15)
+            if self.used_count >= self.max_slots:
+                return False
+            # 2. GPU MEŞGULİYET KONTROLÜ (En kritik nokta: Asla GPU kuyruğuna sokma!)
+            if self.active_gpu_jobs > 0:
+                return False
+            # 3. 1 RPM Hız Sınırı: Son istekten bu yana 60 saniye geçmiş olmalı
+            now = time.time()
+            if self.last_dispatch_time > 0 and (now - self.last_dispatch_time) < 60.0:
+                return False
+            return True
 
     def get_api_key(self, force_new: bool = False, log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
         with self.key_lock:
             if not self.api_key or force_new:
                 if log_callback:
                     if self.bucket_id > 1:
-                        log_callback(f"Anahtar #{self.bucket_id} için otomatik yeni deAPI hesabı açılıyor...", "registering", 8)
+                        log_callback(f"Hesap #{self.bucket_id} için yeni deAPI hesabı hazırlanıyor...", "registering", 8)
                     else:
                         log_callback("deAPI hesabı ve API anahtarı hazırlanıyor...", "registering", 8)
                 with _ACCOUNT_CREATION_LOCK:
                     self.api_key = _create_new_deapi_account(log_callback)
             return self.api_key
 
-    def mark_dispatched(self, slot_idx: int):
-        with self.slots_lock:
+    def mark_started(self):
+        with self.lock:
+            self.active_gpu_jobs += 1
+            self.used_count += 1
             self.last_dispatch_time = time.time()
-            if slot_idx not in self.dispatched_events:
-                self.dispatched_events[slot_idx] = threading.Event()
-            self.dispatched_events[slot_idx].set()
 
-    def mark_failed_or_skipped(self, slot_idx: int):
-        """Eğer bir slot hata alırsa veya iptal edilirse sonraki slotların kilitlenmemesi için sinyal verir."""
-        with self.slots_lock:
-            if slot_idx not in self.dispatched_events:
-                self.dispatched_events[slot_idx] = threading.Event()
-            self.dispatched_events[slot_idx].set()
+    def mark_finished(self):
+        with self.lock:
+            if self.active_gpu_jobs > 0:
+                self.active_gpu_jobs -= 1
 
 
 class DeApiKeyManager:
     """
-    Tüm gelen deAPI işlerini model RPD kotalarına göre paketler (KeyBucket) halinde yönetir:
-    - MiniMax M3: RPD = 3 (1 anahtar ile en fazla 3 video)
-    - LTX 2.5:    RPD = 15 (1 anahtar ile en fazla 15 video)
-    - Her iki modelde de 1 RPM (60 sn) hız sınırı korunur.
-    - Kota dolduğunda sıradaki görev beklemeden hemen yeni anahtar başlatır.
+    Eşzamanlı gelen tüm video isteklerini yönetir:
+    - Eğer mevcut hesapların tamamı GPU'da meşgulse: HİÇ BEKLEMEDEN anında yeni hesap açar!
+    - Görevler birbirini 205 saniye kuyrukta beklemez; paralel GPUs'larda eşzamanlı üretilir.
+    - Boşta hesap varsa ve kotası yetiyorsa hesabı tekrar kullanarak tasarruf sağlar.
     """
     def __init__(self):
         self.lock = threading.Lock()
         self.buckets: List[KeyBucket] = []
-        self.current_bucket: Optional[KeyBucket] = None
         self.bucket_counter = 0
 
-    def assign_slot(self, job_id: str, model_slug: str = "") -> Tuple[KeyBucket, int]:
+    def get_or_create_bucket(self, model_slug: str = "") -> KeyBucket:
         is_ltx = "ltx" in model_slug.lower()
         limit = 15 if is_ltx else 3
         with self.lock:
-            if self.current_bucket is None or self.current_bucket.slots_assigned >= self.current_bucket.max_slots:
-                self.bucket_counter += 1
-                new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
-                self.buckets.append(new_bucket)
-                self.current_bucket = new_bucket
+            # 1. Mevcut hesaplardan GPU'su boşta, kotası olan ve 1 RPM geçmiş olan var mı bak
+            for b in self.buckets:
+                if b.max_slots == limit and b.can_accept():
+                    return b
 
-            bucket = self.current_bucket
-            if bucket.slots_assigned >= limit:
-                self.bucket_counter += 1
-                new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
-                self.buckets.append(new_bucket)
-                self.current_bucket = new_bucket
-                bucket = new_bucket
-
-            slot_idx = bucket.slots_assigned
-            bucket.slots_assigned += 1
-            return bucket, slot_idx
+            # 2. Boşta hesap yoksa (hepsi GPU'da render yapıyor veya kotası doldu):
+            # 205 saniye kuyruk beklemek YERİNE ANINDA YENİ HESAP AÇ VE PARALEL BAŞLAT!
+            self.bucket_counter += 1
+            new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
+            self.buckets.append(new_bucket)
+            return new_bucket
 
 KEY_MANAGER = DeApiKeyManager()
 
@@ -693,8 +702,8 @@ def run_video(
 
     is_animation = bool(valid_images or has_audio_file or has_video_file)
 
-    # Model RPD Kotasına göre (MiniMax: 3, LTX: 15) Slot Tahsisi
-    bucket, slot_idx = KEY_MANAGER.assign_slot(job_id or str(time.time()), model_slug)
+    # Model RPD Kotasına göre (MiniMax: 3, LTX: 15) Hesap Tahsisi (Meşgul GPU'lar asla paylaşılmaz!)
+    bucket = KEY_MANAGER.get_or_create_bucket(model_slug)
 
     if log_callback:
         mode_desc = []
@@ -709,26 +718,16 @@ def run_video(
                 mode_desc.append("Ses")
         
         mode_str = " + ".join(mode_desc) if mode_desc else "Metinden Video (Text-to-Video)"
-        log_callback(f"deAPI motoru hazırlanıyor: {model} ({mode_str}, {width}x{height} px, {duration}s, {actual_fps} FPS) [Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots}]...", "registering", 5)
+        log_callback(f"deAPI motoru hazırlanıyor: {model} ({mode_str}, {width}x{height} px, {duration}s, {actual_fps} FPS) [Hesap #{bucket.bucket_id}, Kullanım: {bucket.used_count + 1}/{bucket.max_slots}]...", "registering", 5)
 
     request_id = None
     api_key = None
-    try:
-        # 1. Eğer bu anahtarda önceki bir slot varsa onun deAPI'ye isteği göndermesini bekle
-        if slot_idx > 0:
-            prev_slot = slot_idx - 1
-            while not bucket.get_event(prev_slot).is_set():
-                if is_active and not is_active():
-                    bucket.mark_failed_or_skipped(slot_idx)
-                    return {"error": "İşlem iptal edildi."}
-                if log_callback:
-                    log_callback(f"Önceki deAPI video işleminin gönderimi bekleniyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots})...", "queued", 10)
-                bucket.get_event(prev_slot).wait(timeout=2.0)
+    dispatched = False
 
-        # 2. Bu anahtarın 1 RPM (60 saniye) hız sınırı koruması
+    try:
+        # 1. 1 RPM (60 saniye) hız sınırı koruması (eğer aynı hesap tekrar kullanılıyorsa)
         while True:
             if is_active and not is_active():
-                bucket.mark_failed_or_skipped(slot_idx)
                 return {"error": "İşlem iptal edildi."}
             now = time.time()
             elapsed = now - bucket.last_dispatch_time
@@ -737,17 +736,16 @@ def run_video(
                 break
             wait_sec = int(math.ceil(needed_wait))
             if log_callback:
-                log_callback(f"deAPI 1 RPM hız sınırı korunuyor: İşlem {wait_sec} sn sonra iletilecek... (Sıra: {slot_idx + 1}/{bucket.max_slots})", "queued", 15)
+                log_callback(f"deAPI 1 RPM hız sınırı korunuyor: İşlem {wait_sec} sn sonra iletilecek...", "queued", 15)
             step = min(2.0, max(0.5, needed_wait))
             time.sleep(step)
 
-        # 3. API Anahtarını al (Anahtar 4. iş içinse hemen yeni hesap açılır)
+        # 2. API Anahtarını al (Hesap boşta değilse veya yeni oluşturulduysa anında temin edilir)
         api_key = bucket.get_api_key(force_new=False, log_callback=log_callback)
 
         max_send_attempts = 4
         for attempt in range(max_send_attempts):
             if is_active and not is_active():
-                bucket.mark_failed_or_skipped(slot_idx)
                 return {"error": "İşlem iptal edildi."}
 
             headers = {
@@ -756,7 +754,7 @@ def run_video(
             }
 
             if log_callback:
-                log_callback(f"Video üretim isteği deAPI sunucusuna gönderiliyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots})...", "registering", 30)
+                log_callback(f"Video üretim isteği deAPI sunucusuna gönderiliyor (Hesap #{bucket.bucket_id}, Kullanım: {bucket.used_count + 1}/{bucket.max_slots})...", "registering", 30)
 
             try:
                 if is_animation:
@@ -802,7 +800,6 @@ def run_video(
                         log_callback(f"Ağ bağlantı hatası: {net_err}. 5 sn sonra tekrar deneniyor...", "warning", 30)
                     time.sleep(5)
                     continue
-                bucket.mark_failed_or_skipped(slot_idx)
                 raise RuntimeError(f"deAPI bağlantı hatası: {net_err}")
 
             # 429 Rate Limit (1 RPM) Kontrolü
@@ -813,7 +810,6 @@ def run_video(
                 rem = min(retry_after, 60)
                 while rem > 0:
                     if is_active and not is_active():
-                        bucket.mark_failed_or_skipped(slot_idx)
                         return {"error": "İşlem iptal edildi."}
                     if log_callback:
                         log_callback(f"deAPI 1 RPM hız sınırı korunuyor ({rem} sn)...", "warning", 32)
@@ -834,9 +830,10 @@ def run_video(
                 resp_data = resp.json().get("data", {})
                 request_id = resp_data.get("request_id")
                 if request_id:
-                    bucket.mark_dispatched(slot_idx)
+                    bucket.mark_started()
+                    dispatched = True
                     if log_callback:
-                        log_callback(f"İş deAPI GPU kuyruğuna alındı (ID: {request_id[:8]}...). Anahtar #{bucket.bucket_id} (Kullanım: {slot_idx + 1}/{bucket.max_slots})", "generating", 35)
+                        log_callback(f"İş deAPI GPU işlemine alındı (ID: {request_id[:8]}...). Hesap #{bucket.bucket_id} (Kullanım: {bucket.used_count}/{bucket.max_slots})", "generating", 35)
                     break
 
             # Diğer hatalar (422 vb.)
@@ -849,92 +846,89 @@ def run_video(
                     err_msg += " -> " + json.dumps(err_json["errors"], ensure_ascii=False)
             except Exception:
                 pass
-            bucket.mark_failed_or_skipped(slot_idx)
             raise RuntimeError(f"deAPI Hatası (HTTP {resp.status_code}): {err_msg}")
 
-    except Exception as e:
-        bucket.mark_failed_or_skipped(slot_idx)
-        raise e
+        if not request_id:
+            raise RuntimeError("deAPI video isteği başlatılamadı.")
 
-    if not request_id:
-        bucket.mark_failed_or_skipped(slot_idx)
-        raise RuntimeError("deAPI video isteği başlatılamadı.")
+        # 3. Polling (İşin durumunu takip et)
+        poll_url = f"{BASE_URL}/jobs/{request_id}"
+        start_poll_time = time.time()
+        last_reported_pct = 35
+        last_heartbeat_time = time.time()
 
-    # 5. Polling (İşin durumunu takip et)
-    poll_url = f"{BASE_URL}/jobs/{request_id}"
-    start_poll_time = time.time()
-    last_reported_pct = 35
-    last_heartbeat_time = time.time()
+        while True:
+            time.sleep(3)
+            now_t = time.time()
+            elapsed_total = int(now_t - start_poll_time)
 
-    while True:
-        time.sleep(3)
-        now_t = time.time()
-        elapsed_total = int(now_t - start_poll_time)
+            try:
+                r_poll = requests.get(
+                    poll_url,
+                    headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                    timeout=25
+                )
+                if r_poll.status_code == 200:
+                    p_info = r_poll.json().get("data", {})
+                    status = p_info.get("status", "processing")
+                    progress = float(p_info.get("progress", 0.0))
 
-        try:
-            r_poll = requests.get(
-                poll_url,
-                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                timeout=25
-            )
-            if r_poll.status_code == 200:
-                p_info = r_poll.json().get("data", {})
-                status = p_info.get("status", "processing")
-                progress = float(p_info.get("progress", 0.0))
+                    calc_pct = int(35 + min(60.0, progress * 0.6))
+                    if calc_pct > last_reported_pct:
+                        last_reported_pct = calc_pct
+                        if log_callback:
+                            log_callback(f"Video kareleri üretiliyor (%{int(progress)})...", "generating", last_reported_pct)
+                    elif progress == 0.0 and (now_t - last_heartbeat_time >= 8):
+                        last_heartbeat_time = now_t
+                        if log_callback:
+                            log_callback(f"deAPI GPU işlemi hazırlanıyor ({elapsed_total} sn)...", "generating", 35)
 
-                calc_pct = int(35 + min(60.0, progress * 0.6))
-                if calc_pct > last_reported_pct:
-                    last_reported_pct = calc_pct
-                    if log_callback:
-                        log_callback(f"Video kareleri üretiliyor (%{int(progress)})...", "generating", last_reported_pct)
-                elif progress == 0.0 and (now_t - last_heartbeat_time >= 8):
-                    # Progress %0 iken (GPU sırası beklenirken) kullanıcının dondu sanmaması için canlı kalp atışı
-                    last_heartbeat_time = now_t
-                    if log_callback:
-                        log_callback(f"deAPI GPU kuyruğu işleniyor ({elapsed_total} sn)...", "generating", 35)
+                    if status == "done":
+                        if log_callback:
+                            log_callback("GPU üretimi tamamlandı! Video CDN bağlantısı alınıyor...", "generating", 95)
 
-                if status == "done":
-                    if log_callback:
-                        log_callback("GPU üretimi tamamlandı! Video CDN bağlantısı alınıyor...", "generating", 95)
+                        # CDN S3 yükleme gecikmesi için result_url kontrolü
+                        result_url = p_info.get("result_url")
+                        sub_retries = 0
+                        while not result_url and sub_retries < 12:
+                            time.sleep(2)
+                            sub_retries += 1
+                            sub_resp = requests.get(
+                                poll_url,
+                                headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
+                                timeout=25
+                            )
+                            if sub_resp.status_code == 200:
+                                result_url = sub_resp.json().get("data", {}).get("result_url")
 
-                    # CDN S3 yükleme gecikmesi için result_url kontrolü
-                    result_url = p_info.get("result_url")
-                    sub_retries = 0
-                    while not result_url and sub_retries < 12:
-                        time.sleep(2)
-                        sub_retries += 1
-                        sub_resp = requests.get(
-                            poll_url,
-                            headers={"Authorization": f"Bearer {api_key}", "Accept": "application/json"},
-                            timeout=25
-                        )
-                        if sub_resp.status_code == 200:
-                            result_url = sub_resp.json().get("data", {}).get("result_url")
+                        if not result_url:
+                            raise RuntimeError("Video tamamlandı ancak deAPI indirme bağlantısı (result_url) vermedi.")
 
-                    if not result_url:
-                        raise RuntimeError("Video tamamlandı ancak deAPI indirme bağlantısı (result_url) vermedi.")
+                        if log_callback:
+                            log_callback("Video başarıyla hazırlandı ve sunuldu!", "completed", 100)
 
-                    if log_callback:
-                        log_callback("Video başarıyla hazırlandı ve sunuldu!", "completed", 100)
+                        return {
+                            "output": result_url,
+                            "request_id": request_id,
+                            "model": model,
+                            "status": "completed"
+                        }
 
-                    return {
-                        "output": result_url,
-                        "request_id": request_id,
-                        "model": model,
-                        "status": "completed"
-                    }
+                    elif status == "error":
+                        err_code = p_info.get("error_code", "ERROR")
+                        err_reason = p_info.get("error_reason", "Bilinmeyen hata")
+                        raise RuntimeError(f"deAPI video üretimi başarısız: {err_code} - {err_reason}")
 
-                elif status == "error":
-                    err_code = p_info.get("error_code", "ERROR")
-                    err_reason = p_info.get("error_reason", "Bilinmeyen hata")
-                    raise RuntimeError(f"deAPI video üretimi başarısız: {err_code} - {err_reason}")
+            except requests.RequestException as e:
+                # Geçici sorgu ağ hatalarını tolere et
+                print(f"[!] Durum sorgulama ağ hatası: {e}", flush=True)
 
-        except requests.RequestException as e:
-            # Geçici sorgu ağ hatalarını tolere et
-            print(f"[!] Durum sorgulama ağ hatası: {e}", flush=True)
+            if time.time() - start_poll_time > 600:
+                raise TimeoutError("deAPI video üretimi zaman aşımına uğradı (10 dakika).")
 
-        if time.time() - start_poll_time > 600:
-            raise TimeoutError("deAPI video üretimi zaman aşımına uğradı (10 dakika).")
+    finally:
+        if dispatched:
+            bucket.mark_finished()
 
 
 # Alias fonksiyonu (diğer modüllerle uyumluluk için)
