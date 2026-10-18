@@ -120,7 +120,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # ------------------------------------------------------------------------------
 # PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
-PROXY_MODE = 1
+PROXY_MODE = 0
 CLOAK_PROXY_URL = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 
 
@@ -364,103 +364,13 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
 
     api_key = m_key.group(1)
     if log_callback:
-        log_callback(f"Yeni deAPI hesabı açıldı! API Key hazır (3 kullanım tanımlandı).", "success", 28)
+        log_callback("Yeni deAPI hesabı açıldı! API Key hazır.", "success", 28)
 
     return api_key
 
 
 # ==============================================================================
-# 2. ÇOKLU ANAHTAR HAVUZU & 3 KULLANIMLIK SLOT YÖNETİMİ
-# ==============================================================================
-
-class KeyBucket:
-    """
-    Her bir deAPI hesabını/anahtarını ve model RPD kotasına göre (MiniMax: 3, LTX: 15) slotlarını yönetir.
-    - Slot 0 (1. İşlem): Hemen başlar (cooldown yoksa).
-    - Slot 1+ (Sıradaki İşlemler): Önceki slotun API'ye iletilmesini bekler, ardından 1 RPM (60 sn) cooldown'ını bekler.
-    """
-    def __init__(self, bucket_id: int, max_slots: int = 3):
-        self.bucket_id = bucket_id
-        self.max_slots = max_slots
-        self.api_key: Optional[str] = None
-        self.key_lock = threading.Lock()
-        self.created_at = time.time()
-        self.last_dispatch_time = 0.0
-        self.slots_assigned = 0
-        self.dispatched_events: Dict[int, threading.Event] = {}
-        self.slots_lock = threading.RLock()
-
-    def get_event(self, slot_idx: int) -> threading.Event:
-        with self.slots_lock:
-            if slot_idx not in self.dispatched_events:
-                self.dispatched_events[slot_idx] = threading.Event()
-            return self.dispatched_events[slot_idx]
-
-    def get_api_key(self, force_new: bool = False, log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
-        with self.key_lock:
-            if not self.api_key or force_new:
-                if log_callback:
-                    if self.bucket_id > 1:
-                        log_callback(f"Anahtar #{self.bucket_id} için otomatik yeni deAPI hesabı açılıyor...", "registering", 8)
-                    else:
-                        log_callback("deAPI hesabı ve API anahtarı hazırlanıyor...", "registering", 8)
-                with _ACCOUNT_CREATION_LOCK:
-                    self.api_key = _create_new_deapi_account(log_callback)
-            return self.api_key
-
-    def mark_dispatched(self, slot_idx: int):
-        with self.slots_lock:
-            self.last_dispatch_time = time.time()
-            if slot_idx not in self.dispatched_events:
-                self.dispatched_events[slot_idx] = threading.Event()
-            self.dispatched_events[slot_idx].set()
-
-    def mark_failed_or_skipped(self, slot_idx: int):
-        """Eğer bir slot hata alırsa veya iptal edilirse sonraki slotların kilitlenmemesi için sinyal verir."""
-        with self.slots_lock:
-            if slot_idx not in self.dispatched_events:
-                self.dispatched_events[slot_idx] = threading.Event()
-            self.dispatched_events[slot_idx].set()
-
-
-class DeApiKeyManager:
-    """
-    Tüm gelen deAPI işlerini model RPD kotalarına göre paketler (KeyBucket) halinde yönetir:
-    - MiniMax M3: RPD = 3 (1 anahtar ile en fazla 3 video)
-    - LTX 2.5:    RPD = 15 (1 anahtar ile en fazla 15 video)
-    - Her anahtar (KeyBucket) tamamen bağımsızdır ve paralel (multi-thread) çalışır.
-    - Anahtar içi: 1 RPM (60 sn) hız sınırı korunur.
-    - Anahtarlar arası: 4., 7., 10... gibi yeni anahtara geçen görevler önceki anahtarın bitmesini
-      veya işlemlerini ASLA beklemez; derhal yeni hesap açıp bağımsız olarak başlar!
-    """
-    def __init__(self):
-        self.lock = threading.Lock()
-        self.buckets: List[KeyBucket] = []
-        self.current_bucket: Optional[KeyBucket] = None
-        self.bucket_counter = 0
-
-    def assign_slot(self, job_id: str, model_slug: str = "") -> Tuple[KeyBucket, int]:
-        is_ltx = "ltx" in model_slug.lower()
-        limit = 15 if is_ltx else 3
-        with self.lock:
-            if (self.current_bucket is None or 
-                self.current_bucket.slots_assigned >= self.current_bucket.max_slots or
-                self.current_bucket.max_slots != limit):
-                self.bucket_counter += 1
-                new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
-                self.buckets.append(new_bucket)
-                self.current_bucket = new_bucket
-
-            bucket = self.current_bucket
-            slot_idx = bucket.slots_assigned
-            bucket.slots_assigned += 1
-            return bucket, slot_idx
-
-KEY_MANAGER = DeApiKeyManager()
-
-
-# ==============================================================================
-# 3. VİDEO ÇÖZÜNÜRLÜK & PARAMETRE NORMALİZASYONU
+# 2. VİDEO ÇÖZÜNÜRLÜK & PARAMETRE NORMALİZASYONU
 # ==============================================================================
 
 def normalize_dimensions(aspect_ratio: str, resolution: str = "768p") -> Tuple[int, int]:
@@ -529,11 +439,10 @@ def run_video(
     """
     deAPI üzerinden MiniMax M3 veya LTX 2.5 video modelini çalıştırır.
     İş akışı:
-      1. Çoklu görev kuyruğu (KeyBucket): 1 anahtar en fazla 3 görev alır.
-      2. 1., 2. ve 3. görevler aynı anahtarda sırayla 1 RPM (60 sn) bekler.
-      3. 4. görev geldiğinde (anahtar kotası dolunca) beklemeden hemen yeni anahtar açılır ve işlem başlar.
-      4. Keyframe (Start/End) ve Full-Reference (Görsel + Video + Ses) medya modları desteklenir.
-      5. İşi takip eder ve bitince video bağlantısını döndürür.
+      1. Her video görevi için taze bir deAPI hesabı oluşturulur (tek hesap, tek kullanım).
+      2. Görevler bağımsız ve beklemesiz çalışır.
+      3. Keyframe (Start/End) ve Full-Reference (Görsel + Video + Ses) medya modları desteklenir.
+      4. İşi takip eder ve bitince video bağlantısını döndürür.
     """
     model_slug = MODEL_SLUGS.get(model, model)
     width, height = normalize_dimensions(aspect_ratio, resolution)
@@ -599,9 +508,6 @@ def run_video(
 
     is_animation = bool(valid_images or has_audio_file or has_video_file)
 
-    # Model RPD Kotasına göre (MiniMax: 3, LTX: 15) Slot Tahsisi
-    bucket, slot_idx = KEY_MANAGER.assign_slot(job_id or str(time.time()), model_slug)
-
     if log_callback:
         mode_desc = []
         if ref_mode == "frames":
@@ -615,45 +521,21 @@ def run_video(
                 mode_desc.append("Ses")
         
         mode_str = " + ".join(mode_desc) if mode_desc else "Metinden Video (Text-to-Video)"
-        log_callback(f"deAPI motoru hazırlanıyor: {model} ({mode_str}, {width}x{height} px, {duration}s, {actual_fps} FPS) [Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots}]...", "registering", 5)
+        log_callback(f"deAPI motoru hazırlanıyor: {model} ({mode_str}, {width}x{height} px, {duration}s, {actual_fps} FPS)...", "registering", 5)
 
     request_id = None
     api_key = None
     try:
-        # 1. Eğer bu anahtarda önceki bir slot varsa onun deAPI'ye isteği göndermesini bekle
-        if slot_idx > 0:
-            prev_slot = slot_idx - 1
-            while not bucket.get_event(prev_slot).is_set():
-                if is_active and not is_active():
-                    bucket.mark_failed_or_skipped(slot_idx)
-                    return {"error": "İşlem iptal edildi."}
-                if log_callback:
-                    log_callback(f"Önceki deAPI video işleminin gönderimi bekleniyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots})...", "queued", 10)
-                bucket.get_event(prev_slot).wait(timeout=2.0)
+        if is_active and not is_active():
+            return {"error": "İşlem iptal edildi."}
 
-        # 2. Bu anahtarın 1 RPM (60 saniye) hız sınırı koruması
-        while True:
-            if is_active and not is_active():
-                bucket.mark_failed_or_skipped(slot_idx)
-                return {"error": "İşlem iptal edildi."}
-            now = time.time()
-            elapsed = now - bucket.last_dispatch_time
-            needed_wait = 60.0 - elapsed
-            if needed_wait <= 0 or bucket.last_dispatch_time <= 0:
-                break
-            wait_sec = int(math.ceil(needed_wait))
-            if log_callback:
-                log_callback(f"deAPI 1 RPM hız sınırı korunuyor: İşlem {wait_sec} sn sonra iletilecek... (Sıra: {slot_idx + 1}/{bucket.max_slots})", "queued", 15)
-            step = min(2.0, max(0.5, needed_wait))
-            time.sleep(step)
-
-        # 3. API Anahtarını al (Anahtar 4. iş içinse hemen yeni hesap açılır)
-        api_key = bucket.get_api_key(force_new=False, log_callback=log_callback)
+        # Tek hesap, tek kullanım: Her video işlemi için doğrudan taze deAPI hesabı açılır
+        with _ACCOUNT_CREATION_LOCK:
+            api_key = _create_new_deapi_account(log_callback=log_callback)
 
         max_send_attempts = 4
         for attempt in range(max_send_attempts):
             if is_active and not is_active():
-                bucket.mark_failed_or_skipped(slot_idx)
                 return {"error": "İşlem iptal edildi."}
 
             headers = {
@@ -662,7 +544,7 @@ def run_video(
             }
 
             if log_callback:
-                log_callback(f"Video üretim isteği deAPI sunucusuna gönderiliyor (Anahtar #{bucket.bucket_id}, Sıra: {slot_idx + 1}/{bucket.max_slots})...", "registering", 30)
+                log_callback("Video üretim isteği deAPI sunucusuna gönderiliyor...", "registering", 30)
 
             try:
                 if is_animation:
@@ -708,7 +590,6 @@ def run_video(
                         log_callback(f"Ağ bağlantı hatası: {net_err}. 5 sn sonra tekrar deneniyor...", "warning", 30)
                     time.sleep(5)
                     continue
-                bucket.mark_failed_or_skipped(slot_idx)
                 raise RuntimeError(f"deAPI bağlantı hatası: {net_err}")
 
             # 429 Rate Limit (1 RPM) Kontrolü
@@ -719,7 +600,6 @@ def run_video(
                 rem = min(retry_after, 60)
                 while rem > 0:
                     if is_active and not is_active():
-                        bucket.mark_failed_or_skipped(slot_idx)
                         return {"error": "İşlem iptal edildi."}
                     if log_callback:
                         log_callback(f"deAPI 1 RPM hız sınırı korunuyor ({rem} sn)...", "warning", 32)
@@ -731,8 +611,9 @@ def run_video(
             # 401 veya 403 (Yetkisiz / Bakiye Yetersiz / Geçersiz Anahtar)
             if resp.status_code in (401, 403):
                 if log_callback:
-                    log_callback("API Anahtarı yetkisiz (401/403). Otomatik yeni anahtar üretiliyor...", "warning", 10)
-                api_key = bucket.get_api_key(force_new=True, log_callback=log_callback)
+                    log_callback("API Anahtarı yetkisiz (401/403). Yeni deAPI hesabı açılıyor...", "warning", 10)
+                with _ACCOUNT_CREATION_LOCK:
+                    api_key = _create_new_deapi_account(log_callback=log_callback)
                 continue
 
             # Başarılı istek
@@ -740,9 +621,8 @@ def run_video(
                 resp_data = resp.json().get("data", {})
                 request_id = resp_data.get("request_id")
                 if request_id:
-                    bucket.mark_dispatched(slot_idx)
                     if log_callback:
-                        log_callback(f"İş deAPI sunucusuna başarıyla iletildi (ID: {request_id[:8]}...). [Anahtar #{bucket.bucket_id}, Kullanım: {slot_idx + 1}/{bucket.max_slots}]", "generating", 35)
+                        log_callback(f"İş deAPI sunucusuna başarıyla iletildi (ID: {request_id[:8]}...).", "generating", 35)
                     break
 
             # Diğer hatalar (422 vb.)
@@ -755,18 +635,15 @@ def run_video(
                     err_msg += " -> " + json.dumps(err_json["errors"], ensure_ascii=False)
             except Exception:
                 pass
-            bucket.mark_failed_or_skipped(slot_idx)
             raise RuntimeError(f"deAPI Hatası (HTTP {resp.status_code}): {err_msg}")
 
     except Exception as e:
-        bucket.mark_failed_or_skipped(slot_idx)
         raise e
 
     if not request_id:
-        bucket.mark_failed_or_skipped(slot_idx)
         raise RuntimeError("deAPI video isteği başlatılamadı.")
 
-    # 5. Polling (İşin durumunu takip et)
+    # Polling (İşin durumunu takip et)
     poll_url = f"{BASE_URL}/jobs/{request_id}"
     start_poll_time = time.time()
     last_reported_pct = 35
@@ -792,12 +669,11 @@ def run_video(
                 if calc_pct > last_reported_pct:
                     last_reported_pct = calc_pct
                     if log_callback:
-                        log_callback(f"Video kareleri üretiliyor (%{int(progress)})... [Anahtar #{bucket.bucket_id}]", "generating", last_reported_pct)
+                        log_callback(f"Video kareleri üretiliyor (%{int(progress)})...", "generating", last_reported_pct)
                 elif progress == 0.0 and (now_t - last_heartbeat_time >= 8):
-                    # Progress %0 iken (deAPI'nin bulut GPU'sunda sıradaki video beklenirken) canlı kalp atışı
                     last_heartbeat_time = now_t
                     if log_callback:
-                        log_callback(f"deAPI bulut GPU sırası işleniyor (Anahtar #{bucket.bucket_id}, İstek: {request_id[:8]}..., Sunucu progress: %0, {elapsed_total} sn)...", "generating", 35)
+                        log_callback(f"deAPI bulut GPU sırası işleniyor (İstek: {request_id[:8]}..., Sunucu progress: %0, {elapsed_total} sn)...", "generating", 35)
 
                 if status == "done":
                     if log_callback:
