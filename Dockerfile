@@ -51,4 +51,4 @@ COPY . .
 # Render $PORT ortam değişkenini dinler, varsayılan 10000
 EXPOSE 10000
 
-CMD ["sh", "-c", "gunicorn --workers 1 --threads 100 --timeout 0 -b 0.0.0.0:${PORT:-10000} app:app"]
+CMD ["sh", "-c", "gunicorn --workers 1 --threads 4 --timeout 0 -b 0.0.0.0:${PORT:-10000} app:app"]
