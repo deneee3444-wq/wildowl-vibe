@@ -519,8 +519,10 @@ class DeApiKeyManager:
     Tüm gelen deAPI işlerini model RPD kotalarına göre paketler (KeyBucket) halinde yönetir:
     - MiniMax M3: RPD = 3 (1 anahtar ile en fazla 3 video)
     - LTX 2.5:    RPD = 15 (1 anahtar ile en fazla 15 video)
-    - Her iki modelde de 1 RPM (60 sn) hız sınırı korunur.
-    - Kota dolduğunda sıradaki görev beklemeden hemen yeni anahtar başlatır.
+    - Her anahtar (KeyBucket) tamamen bağımsızdır ve paralel (multi-thread) çalışır.
+    - Anahtar içi: 1 RPM (60 sn) hız sınırı korunur.
+    - Anahtarlar arası: 4., 7., 10... gibi yeni anahtara geçen görevler önceki anahtarın bitmesini
+      veya işlemlerini ASLA beklemez; derhal yeni hesap açıp bağımsız olarak başlar!
     """
     def __init__(self):
         self.lock = threading.Lock()
@@ -532,20 +534,15 @@ class DeApiKeyManager:
         is_ltx = "ltx" in model_slug.lower()
         limit = 15 if is_ltx else 3
         with self.lock:
-            if self.current_bucket is None or self.current_bucket.slots_assigned >= self.current_bucket.max_slots:
+            if (self.current_bucket is None or 
+                self.current_bucket.slots_assigned >= self.current_bucket.max_slots or
+                self.current_bucket.max_slots != limit):
                 self.bucket_counter += 1
                 new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
                 self.buckets.append(new_bucket)
                 self.current_bucket = new_bucket
 
             bucket = self.current_bucket
-            if bucket.slots_assigned >= limit:
-                self.bucket_counter += 1
-                new_bucket = KeyBucket(self.bucket_counter, max_slots=limit)
-                self.buckets.append(new_bucket)
-                self.current_bucket = new_bucket
-                bucket = new_bucket
-
             slot_idx = bucket.slots_assigned
             bucket.slots_assigned += 1
             return bucket, slot_idx
@@ -836,7 +833,7 @@ def run_video(
                 if request_id:
                     bucket.mark_dispatched(slot_idx)
                     if log_callback:
-                        log_callback(f"İş deAPI GPU kuyruğuna alındı (ID: {request_id[:8]}...). Anahtar #{bucket.bucket_id} (Kullanım: {slot_idx + 1}/{bucket.max_slots})", "generating", 35)
+                        log_callback(f"İş deAPI sunucusuna başarıyla iletildi (ID: {request_id[:8]}...). [Anahtar #{bucket.bucket_id}, Kullanım: {slot_idx + 1}/{bucket.max_slots}]", "generating", 35)
                     break
 
             # Diğer hatalar (422 vb.)
@@ -886,12 +883,12 @@ def run_video(
                 if calc_pct > last_reported_pct:
                     last_reported_pct = calc_pct
                     if log_callback:
-                        log_callback(f"Video kareleri üretiliyor (%{int(progress)})...", "generating", last_reported_pct)
+                        log_callback(f"Video kareleri üretiliyor (%{int(progress)})... [Anahtar #{bucket.bucket_id}]", "generating", last_reported_pct)
                 elif progress == 0.0 and (now_t - last_heartbeat_time >= 8):
-                    # Progress %0 iken (GPU sırası beklenirken) kullanıcının dondu sanmaması için canlı kalp atışı
+                    # Progress %0 iken (deAPI'nin bulut GPU'sunda sıradaki video beklenirken) canlı kalp atışı
                     last_heartbeat_time = now_t
                     if log_callback:
-                        log_callback(f"deAPI GPU kuyruğu işleniyor ({elapsed_total} sn)...", "generating", 35)
+                        log_callback(f"deAPI bulut GPU sırası işleniyor (Anahtar #{bucket.bucket_id}, İstek: {request_id[:8]}..., Sunucu progress: %0, {elapsed_total} sn)...", "generating", 35)
 
                 if status == "done":
                     if log_callback:
@@ -960,4 +957,4 @@ def run_once(
         enhance_prompt=bool(kwargs.get("enhance_prompt", False)),
         seed=kwargs.get("seed"),
         log_callback=log_callback
-  )
+    )
