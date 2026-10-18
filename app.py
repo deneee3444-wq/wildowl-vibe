@@ -408,58 +408,16 @@ app.config['JSON_SORT_KEYS'] = False
 if hasattr(app, 'json'):
     app.json.sort_keys = False
 
-# Persistent Storage on Disk (to survive container restarts and refreshes)
-DATA_DIR = os.path.join(APP_DIR, "data")
-os.makedirs(DATA_DIR, exist_ok=True)
-HISTORY_FILE = os.path.join(DATA_DIR, "history.json")
-PROMPTS_FILE = os.path.join(DATA_DIR, "prompts.json")
-ACTIVE_JOBS_FILE = os.path.join(DATA_DIR, "active_jobs.json")
-
-def _load_json(filepath, default):
-    try:
-        if os.path.exists(filepath):
-            with open(filepath, "r", encoding="utf-8") as f:
-                return json.load(f)
-    except Exception as e:
-        print(f"[!] JSON yükleme hatası ({filepath}): {e}", flush=True)
-    return default
-
-def _save_json(filepath, data):
-    try:
-        temp = filepath + ".tmp"
-        with open(temp, "w", encoding="utf-8") as f:
-            json.dump(data, f, ensure_ascii=False, indent=2)
-        os.replace(temp, filepath)
-    except Exception as e:
-        print(f"[!] JSON kaydetme hatası ({filepath}): {e}", flush=True)
-
-def save_history():
-    _save_json(HISTORY_FILE, GENERATION_HISTORY)
-
-def save_prompts():
-    _save_json(PROMPTS_FILE, CUSTOM_PROMPTS)
-
-def save_active_jobs():
-    safe_jobs = {}
-    for jid, job in ACTIVE_JOBS.items():
-        safe_jobs[jid] = {k: v for k, v in job.items() if k != "images"}
-    _save_json(ACTIVE_JOBS_FILE, safe_jobs)
-
-# Load persisted data
-GENERATION_HISTORY = _load_json(HISTORY_FILE, [])
-CUSTOM_PROMPTS = _load_json(PROMPTS_FILE, [])
+# In-memory stores (RAM)
+GENERATION_HISTORY = []
+CUSTOM_PROMPTS = []
 CHAT_HISTORY = []
-ACTIVE_JOBS = _load_json(ACTIVE_JOBS_FILE, {})
+ACTIVE_JOBS = {}
 
 APP_PASSWORD = "123"
 
 def is_logged_in():
     return session.get('logged_in') == True
-
-@app.route('/healthz')
-def healthz():
-    """Render HTTP health check endpoint - fast and zero overhead."""
-    return "OK", 200
 
 @app.route('/')
 def index():
@@ -498,7 +456,6 @@ def delete_history_item():
     item_id = request.json.get('id')
     global GENERATION_HISTORY
     GENERATION_HISTORY = [item for item in GENERATION_HISTORY if item.get('id') != item_id]
-    save_history()
     return jsonify({'success': True})
 
 @app.route('/api/history/clear-all', methods=['POST'])
@@ -507,7 +464,6 @@ def clear_history():
         return jsonify({'error': 'Unauthorized'}), 401
     global GENERATION_HISTORY
     GENERATION_HISTORY = []
-    save_history()
     return jsonify({'success': True})
 
 # PROMPTS APIS
@@ -532,7 +488,6 @@ def add_prompt():
         'tag': tag
     }
     CUSTOM_PROMPTS.insert(0, new_prompt)
-    save_prompts()
     return jsonify({'success': True, 'prompt': new_prompt})
 
 @app.route('/api/prompts/edit', methods=['POST'])
@@ -549,7 +504,6 @@ def edit_prompt():
         if p['id'] == prompt_id:
             p['prompt'] = prompt_text
             p['tag'] = tag
-            save_prompts()
             return jsonify({'success': True, 'prompt': p})
             
     return jsonify({'error': 'Prompt bulunamadı!'}), 404
@@ -561,7 +515,6 @@ def delete_prompt():
     prompt_id = request.json.get('id')
     global CUSTOM_PROMPTS
     CUSTOM_PROMPTS = [p for p in CUSTOM_PROMPTS if p['id'] != prompt_id]
-    save_prompts()
     return jsonify({'success': True})
 
 @app.route('/api/prompts/clear-all', methods=['POST'])
@@ -570,7 +523,6 @@ def clear_prompts():
         return jsonify({'error': 'Unauthorized'}), 401
     global CUSTOM_PROMPTS
     CUSTOM_PROMPTS = []
-    save_prompts()
     return jsonify({'success': True})
 
 # AI CHAT APIS (PixelBunny Hermes-4-405B)
@@ -832,7 +784,6 @@ def start_generation():
         'outputs': [],
         'error': None
     }
-    save_active_jobs()
     
     t = threading.Thread(target=run_job_in_background, args=(job_id,))
     t.daemon = True
@@ -903,7 +854,6 @@ def start_popvid_extend():
         'outputs': [],
         'error': None
     }
-    save_active_jobs()
     
     t = threading.Thread(target=run_job_in_background, args=(job_id,))
     t.daemon = True
@@ -932,8 +882,6 @@ def run_job_in_background(job_id):
             'pct': job['pct'],
             'time': time_str
         })
-        if status in ["completed", "failed", "generating", "processing"]:
-            save_active_jobs()
         
     prompt = job['prompt']
     model_name = job['model']
@@ -1579,11 +1527,9 @@ def run_job_in_background(job_id):
                         'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
                     }
                     GENERATION_HISTORY.insert(0, item)
-                    save_history()
                     if job_id in ACTIVE_JOBS:
                         ACTIVE_JOBS[job_id]['outputs'] = [output_url]
                         ACTIVE_JOBS[job_id]['status'] = 'completed'
-                        save_active_jobs()
                 else:
                     raise RuntimeError("deAPI Video üretimi URL üretmedi.")
             except Exception as d_err:
@@ -1591,7 +1537,6 @@ def run_job_in_background(job_id):
                 if job_id in ACTIVE_JOBS:
                     ACTIVE_JOBS[job_id]['status'] = 'failed'
                     ACTIVE_JOBS[job_id]['error'] = str(d_err)
-                    save_active_jobs()
             finally:
                 for p in temp_img_paths:
                     if os.path.exists(p):
