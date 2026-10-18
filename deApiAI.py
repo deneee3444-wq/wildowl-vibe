@@ -55,8 +55,7 @@ import requests
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
 import cloakbrowser
-from cloakbrowser import launch_persistent_context
-from browser_manager import BrowserManager
+from browser_manager import fetch_turnstile_session_and_close
 
 def _ensure_browser_binary():
     """
@@ -141,23 +140,12 @@ def _random_password():
     chars = string.ascii_letters + string.digits
     return "DeApi#" + "".join(secrets.choice(chars) for _ in range(8)) + "1"
 
-_BROWSER_MANAGER: Optional[BrowserManager] = None
-_BM_LOCK = threading.Lock()
-
-def get_browser_manager() -> BrowserManager:
-    """Tek ve paylaşımlı arka plan BrowserManager nesnesini döndürür."""
-    global _BROWSER_MANAGER
-    with _BM_LOCK:
-        if _BROWSER_MANAGER is None:
-            proxy = CLOAK_PROXY_URL if PROXY_MODE == 1 else None
-            _BROWSER_MANAGER = BrowserManager(proxy=proxy)
-        return _BROWSER_MANAGER
-
 def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], None]] = None) -> Tuple[Dict[str, str], str, str]:
     """
-    Eğer bellekteki cf_clearance çerezleri hala geçerliyse doğrudan HTTP ile register HTML'ini alır.
-    Çerez yoksa veya bayatladıysa arka plandaki BrowserManager'dan taze Turnstile oturumu alır.
-    Tarayıcı asla sürekli açılıp kapanmaz; Render 512MB RAM sınırında sıfır CPU/RAM piki sağlar!
+    Eğer bellekteki cf_clearance çerezleri hala geçerliyse doğrudan curl_cffi ile
+    hızlıca register sayfasını çeker (1 saniyede biter, tarayıcıya dokunmaz).
+    Çerez yoksa veya bayatladıysa CloakBrowser açılır, Turnstile'ı çözer,
+    çerezi alır ve HEMEN KAPANIR (RAM tamamen boşaltılır).
     """
     cached_cookies = _CACHED_CF_SESSION.get("cookies")
     cached_ua = _CACHED_CF_SESSION.get("ua")
@@ -178,18 +166,18 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
             if resp.status_code == 200 and "wire:snapshot" in resp.text:
                 if log_callback:
                     log_callback("Cloudflare çerezi hala taze! Doğrudan hızlı HTTP ile hesap açılıyor...", "registering", 15)
-                print("[+] Cloudflare çerezi hala geçerli, tarayıcı kullanılmadan doğrudan devam ediliyor.", flush=True)
+                print("[+] Cloudflare çerezi hala geçerli, tarayıcı açılmadan doğrudan devam ediliyor.", flush=True)
                 return cached_cookies, cached_ua, resp.text
             else:
-                print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), arka plan tarayıcısıyla yenilenecek.", flush=True)
+                print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), Turnstile için tarayıcı açılacak.", flush=True)
         except Exception as e:
-            print(f"[!] Çerez test hatası: {e}, arka plan tarayıcısıyla yenilenecek.", flush=True)
+            print(f"[!] Çerez test hatası: {e}, Turnstile için tarayıcı açılacak.", flush=True)
 
-    # Çerez yok veya bayatlamış -> Arka planda açık bekleyen BrowserManager'dan taze oturum al
+    # Çerez yok veya bayatlamış -> CloakBrowser açılır, Turnstile'ı çözer ve HEMEN KAPANIR
     if log_callback:
-        log_callback("Cloudflare çerezi tazelemek için arka plan tarayıcısı devrede...", "registering", 12)
-    bm = get_browser_manager()
-    session_data = bm.get_fresh_session(log_callback=log_callback)
+        log_callback("Cloudflare Turnstile çözülüyor (işlem sonrası tarayıcı kapanacak)...", "registering", 12)
+    proxy = CLOAK_PROXY_URL if PROXY_MODE == 1 else None
+    session_data = fetch_turnstile_session_and_close(proxy=proxy, log_callback=log_callback)
     raw_cookies = session_data["cookies"]
     ua = session_data["user_agent"]
     page_html = session_data["html"]
@@ -200,6 +188,19 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
     _CACHED_CF_SESSION["ua"] = ua
     _CACHED_CF_SESSION["created_at"] = time.time()
     return raw_cookies, ua, page_html
+
+def warmup_cf_session():
+    """
+    Sunucu (app.py) ayağa kalktığında arka planda otomatik çalışır;
+    Turnstile oturumunu erkenden alıp önbelleğe koyar ve tarayıcıyı HEMEN KAPATIR.
+    Kullanıcı siteye geldiğinde çerez zaten hazır olur ve RAM serbest kalır!
+    """
+    try:
+        print("[*] [Boot Warmup] deAPI Cloudflare Turnstile ön ısıtması başlatılıyor...", flush=True)
+        _get_or_refresh_cf_session()
+        print("[+] [Boot Warmup] deAPI Turnstile çerezi hazırlandı, tarayıcı kapandı ve RAM serbest bırakıldı!", flush=True)
+    except Exception as e:
+        print(f"[!] [Boot Warmup] Ön ısıtma hatası (ilk işlemde tekrar denenecek): {e}", flush=True)
 
 def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
     """
