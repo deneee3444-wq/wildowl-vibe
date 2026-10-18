@@ -49,8 +49,6 @@ except ImportError:
 
 try:
     import deApiAI
-    if hasattr(deApiAI, "warmup_cf_session"):
-        threading.Thread(target=deApiAI.warmup_cf_session, daemon=True, name="TurnstileWarmup").start()
 except ImportError:
     deApiAI = None
 
@@ -1915,5 +1913,13 @@ def get_active_jobs():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
+    if deApiAI and hasattr(deApiAI, "warmup_cf_session"):
+        print("[*] [Boot] deAPI Cloudflare Turnstile ön ısıtması yapılıyor, lütfen bekleyin...", flush=True)
+        try:
+            deApiAI.warmup_cf_session()
+        except Exception as w_err:
+            print(f"[!] [Boot] Warmup hatası: {w_err}", flush=True)
+        print("[+] [Boot] Turnstile hazırlandı, tarayıcı kapandı. Web sunucusu başlatılıyor...", flush=True)
+
     print(f"[*] Studio Web Server başlatıldı: http://0.0.0.0:{port}", flush=True)
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
