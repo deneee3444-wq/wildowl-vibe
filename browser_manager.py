@@ -11,12 +11,13 @@ DEFAULT_PROXY = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.
 CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
 PROFILE_DIR = os.path.join(CURRENT_DIR, "browser_profile")
 
-_BROWSER_LOCK = threading.Lock()
+_BROWSER_LOCK = threading.RLock()
 
 def fetch_turnstile_session_and_close(
     proxy: Optional[str] = DEFAULT_PROXY,
     timeout: int = 120,
-    log_callback: Optional[Callable[[str, str, int], None]] = None
+    log_callback: Optional[Callable[[str, str, int], None]] = None,
+    is_cached_valid_fn: Optional[Callable[[], Optional[Dict[str, Any]]]] = None
 ) -> Dict[str, Any]:
     """
     Cloudflare Turnstile doğrulaması için CloakBrowser'ı açar,
@@ -28,6 +29,18 @@ def fetch_turnstile_session_and_close(
         proxy = None
 
     with _BROWSER_LOCK:
+        # Double-check: Eğer biz kilidi beklerken başka bir işlem Turnstile'ı tazelediyse tarayıcıyı açma!
+        if is_cached_valid_fn:
+            try:
+                cached_data = is_cached_valid_fn()
+                if cached_data:
+                    print("[+] Az önce başka bir işlem Turnstile oturumunu tazeledi; tarayıcı açılmadan hafızadaki çerez kullanılıyor.", flush=True)
+                    if log_callback:
+                        log_callback("Taze Cloudflare oturumu hafızadan alındı.", "registering", 16)
+                    return cached_data
+            except Exception:
+                pass
+
         if log_callback:
             log_callback("Cloudflare Turnstile doğrulaması için CloakBrowser açılıyor...", "registering", 12)
         print(f"[*] Cloudflare Turnstile doğrulaması için CloakBrowser açılıyor... (Proxy: {'Açık' if proxy else 'Kapalı'})", flush=True)
@@ -67,9 +80,11 @@ def fetch_turnstile_session_and_close(
 
             t0 = time.time()
             last_click_time = 0
+            last_log_time = t0
             clicked_logged = False
 
             while time.time() - t0 < timeout:
+                now = time.time()
                 try:
                     title = page.title()
                 except Exception:
@@ -94,8 +109,13 @@ def fetch_turnstile_session_and_close(
                         if bypassed:
                             break
 
+                # Önyüzün canlı kalması için her 5 saniyede bir kalp atışı logla
+                if log_callback and (now - last_log_time >= 5):
+                    last_log_time = now
+                    elapsed_sec = int(now - t0)
+                    log_callback(f"Cloudflare Turnstile doğrulanıyor ({elapsed_sec} sn)...", "registering", 14)
+
                 # Cloudflare Turnstile iframe ve checkbox tıklama
-                now = time.time()
                 if now - last_click_time >= 1.5:
                     for frame in page.frames:
                         if "challenges.cloudflare.com" in frame.url or "turnstile" in frame.url:
