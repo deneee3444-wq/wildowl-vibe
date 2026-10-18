@@ -56,6 +56,7 @@ from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
 import cloakbrowser
 from cloakbrowser import launch_persistent_context
+from browser_manager import BrowserManager
 
 def _ensure_browser_binary():
     """
@@ -140,130 +141,23 @@ def _random_password():
     chars = string.ascii_letters + string.digits
     return "DeApi#" + "".join(secrets.choice(chars) for _ in range(8)) + "1"
 
-def _get_cf_session_via_browser(log_callback: Optional[Callable[[str, str, int], None]] = None) -> Tuple[Dict[str, str], str, str]:
-    """
-    Tarayıcıyı (CloakBrowser) sadece Cloudflare Turnstile'ı çözüp giriş çerezlerini
-    almak için kısa süreli çalıştırır ve HEMEN KAPATIR.
-    Proxy ayarı (PROXY_MODE=1 ise) yalnızca tarayıcı açık kaldığı süre boyunca devrededir.
-    """
-    if log_callback:
-        log_callback("Cloudflare Turnstile doğrulaması için CloakBrowser açılıyor...", "registering", 12)
-    print(f"[*] Cloudflare Turnstile doğrulaması için CloakBrowser başlatılıyor... (Proxy Modu: {'Açık' if PROXY_MODE == 1 else 'Kapalı'})", flush=True)
+_BROWSER_MANAGER: Optional[BrowserManager] = None
+_BM_LOCK = threading.Lock()
 
-    os.makedirs(PROFILE_DIR, exist_ok=True)
-
-    context_kwargs = {
-        "user_data_dir": PROFILE_DIR,
-        "headless": True,
-        "humanize": True,
-        "stealth_args": True,
-        "args": [
-            "--disable-infobars",
-            "--no-first-run",
-            "--no-default-browser-check",
-            "--window-size=1920,1080",
-            "--disable-dev-shm-usage",
-            "--no-sandbox",
-        ],
-    }
-
-    # Proxy yalnızca CloakBrowser oturumunda kullanılır
-    if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
-        context_kwargs["proxy"] = CLOAK_PROXY_URL.strip()
-
-    context = launch_persistent_context(**context_kwargs)
-
-    try:
-        # Önceki login çerezlerini temizle
-        for c in context.cookies():
-            if "appdeapiai" in c.get("name", ""):
-                try:
-                    context.clear_cookies()
-                except Exception:
-                    pass
-                break
-
-        page = context.pages[0] if context.pages else context.new_page()
-        page.goto("https://app.deapi.ai/register", wait_until="domcontentloaded")
-
-        t0 = time.time()
-        last_click_time = 0
-        clicked_logged = False
-        while time.time() - t0 < 120:
-            try:
-                title = page.title()
-            except Exception:
-                title = ""
-
-            cookies_dict = {c["name"]: c["value"] for c in context.cookies()}
-
-            bypassed = False
-            if "Just a moment" not in title and "Bir dakika" not in title and ("Register" in title or "deAPI" in title or "Sign" in title or "Hesap" in title):
-                bypassed = True
-            elif "cf_clearance" in cookies_dict:
-                bypassed = True
-
-            if bypassed:
-                try:
-                    content = page.content()
-                    if "wire:snapshot" in content or "csrf-token" in content:
-                        break
-                except Exception:
-                    if bypassed:
-                        break
-
-            now = time.time()
-            if now - last_click_time >= 1.5:
-                for frame in page.frames:
-                    if "challenges.cloudflare.com" in frame.url or "turnstile" in frame.url:
-                        try:
-                            cb = frame.locator("input[type='checkbox'], .ctp-checkbox-label, #challenge-stage")
-                            if cb.count() > 0:
-                                cb.first.click(timeout=1000)
-                            else:
-                                frame.locator("body").click(timeout=1000)
-                            last_click_time = now
-                            if log_callback and not clicked_logged:
-                                log_callback("Cloudflare Turnstile kutucuğu tıklandı, çözülüyor...", "registering", 15)
-                                clicked_logged = True
-                            break
-                        except Exception:
-                            try:
-                                frame.locator("body").click(timeout=1000)
-                                last_click_time = now
-                                break
-                            except Exception:
-                                pass
-            time.sleep(1)
-
-        # Cookiebot engelini kaldır (varsa)
-        try:
-            page.evaluate("""() => {
-                const el = document.getElementById('CybotCookiebotDialog');
-                if (el) el.remove();
-                const underlay = document.getElementById('CybotCookiebotDialogBodyUnderlay');
-                if (underlay) underlay.remove();
-            }""")
-        except Exception:
-            pass
-
-        time.sleep(1)
-        cookies = {c["name"]: c["value"] for c in context.cookies()}
-        ua = page.evaluate("() => navigator.userAgent")
-        page_html = page.content()
-
-    finally:
-        context.close()
-        if log_callback:
-            log_callback("Tarayıcı kapatıldı. İşlemler arka planda hızlı HTTP ile devam ediyor...", "registering", 18)
-        print("[+] CloakBrowser kapatıldı.", flush=True)
-
-    return cookies, ua, page_html
+def get_browser_manager() -> BrowserManager:
+    """Tek ve paylaşımlı arka plan BrowserManager nesnesini döndürür."""
+    global _BROWSER_MANAGER
+    with _BM_LOCK:
+        if _BROWSER_MANAGER is None:
+            proxy = CLOAK_PROXY_URL if PROXY_MODE == 1 else None
+            _BROWSER_MANAGER = BrowserManager(proxy=proxy)
+        return _BROWSER_MANAGER
 
 def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], None]] = None) -> Tuple[Dict[str, str], str, str]:
     """
     Eğer bellekteki cf_clearance çerezleri hala geçerliyse doğrudan HTTP ile register HTML'ini alır.
-    Tarayıcıyı (CloakBrowser) YALNIZCA çerez yoksa veya bayatladıysa (403 / challenge) açar!
+    Çerez yoksa veya bayatladıysa arka plandaki BrowserManager'dan taze Turnstile oturumu alır.
+    Tarayıcı asla sürekli açılıp kapanmaz; Render 512MB RAM sınırında sıfır CPU/RAM piki sağlar!
     """
     cached_cookies = _CACHED_CF_SESSION.get("cookies")
     cached_ua = _CACHED_CF_SESSION.get("ua")
@@ -283,22 +177,29 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
             resp = test_session.get("https://app.deapi.ai/register", timeout=15)
             if resp.status_code == 200 and "wire:snapshot" in resp.text:
                 if log_callback:
-                    log_callback("Cloudflare çerezi hala taze! Tarayıcı açılmadan doğrudan hızlı HTTP ile hesap açılıyor...", "registering", 15)
-                print("[+] Cloudflare çerezi hala geçerli, tarayıcı AÇILMADAN doğrudan devam ediliyor.", flush=True)
+                    log_callback("Cloudflare çerezi hala taze! Doğrudan hızlı HTTP ile hesap açılıyor...", "registering", 15)
+                print("[+] Cloudflare çerezi hala geçerli, tarayıcı kullanılmadan doğrudan devam ediliyor.", flush=True)
                 return cached_cookies, cached_ua, resp.text
             else:
-                print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), Turnstile için tarayıcı açılacak.", flush=True)
+                print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), arka plan tarayıcısıyla yenilenecek.", flush=True)
         except Exception as e:
-            print(f"[!] Çerez test hatası: {e}, tarayıcı açılacak.", flush=True)
+            print(f"[!] Çerez test hatası: {e}, arka plan tarayıcısıyla yenilenecek.", flush=True)
 
-    # Çerez yok veya bayatlamış -> CloakBrowser ile Turnstile çöz
+    # Çerez yok veya bayatlamış -> Arka planda açık bekleyen BrowserManager'dan taze oturum al
     if log_callback:
-        log_callback("Cloudflare çerezi tazelemek için CloakBrowser açılıyor...", "registering", 12)
-    cookies, ua, page_html = _get_cf_session_via_browser(log_callback)
-    _CACHED_CF_SESSION["cookies"] = cookies
+        log_callback("Cloudflare çerezi tazelemek için arka plan tarayıcısı devrede...", "registering", 12)
+    bm = get_browser_manager()
+    session_data = bm.get_fresh_session(log_callback=log_callback)
+    raw_cookies = session_data["cookies"]
+    ua = session_data["user_agent"]
+    page_html = session_data["html"]
+
+    # Sadece Cloudflare çerezlerini önbelleğe kaydet
+    cf_cookies = {k: v for k, v in raw_cookies.items() if "cf" in k.lower()}
+    _CACHED_CF_SESSION["cookies"] = cf_cookies if cf_cookies else raw_cookies
     _CACHED_CF_SESSION["ua"] = ua
     _CACHED_CF_SESSION["created_at"] = time.time()
-    return cookies, ua, page_html
+    return raw_cookies, ua, page_html
 
 def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
     """
