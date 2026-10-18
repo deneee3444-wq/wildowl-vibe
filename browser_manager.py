@@ -3,37 +3,35 @@
 
 import os
 import time
-import queue
 import threading
+from typing import Optional, Dict, Any, Callable
 from cloakbrowser import launch_persistent_context
 
 DEFAULT_PROXY = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 CURRENT_DIR = os.path.abspath(os.path.dirname(__file__))
 PROFILE_DIR = os.path.join(CURRENT_DIR, "browser_profile")
 
-class BrowserManager:
-    """
-    Playwright / CloakBrowser için Thread-Safe Yönetici.
-    Flask başladığında bağımsız tek bir arka plan worker thread'inde çalışır,
-    tarayıcıyı açık tutar ve tüm route / deAPI isteklerini thread çakışması
-    ve Render 512MB RAM piki olmadan güvenle karşılar.
-    """
-    def __init__(self, proxy=DEFAULT_PROXY, timeout=180):
-        if proxy and proxy.strip().lower() in ["none", "direct", "no", "off", ""]:
-            self.proxy = None
-        else:
-            self.proxy = proxy
-        self.timeout = timeout
-        self.task_queue = queue.Queue()
-        self.ready_event = threading.Event()
-        self.thread = threading.Thread(target=self._worker_loop, daemon=True, name="CloakBrowserWorker")
-        self.thread.start()
+_BROWSER_LOCK = threading.Lock()
 
-        # İlk açılışın hazır olmasını bekle (maksimum 45 sn)
-        self.ready_event.wait(timeout=45)
+def fetch_turnstile_session_and_close(
+    proxy: Optional[str] = DEFAULT_PROXY,
+    timeout: int = 120,
+    log_callback: Optional[Callable[[str, str, int], None]] = None
+) -> Dict[str, Any]:
+    """
+    Cloudflare Turnstile doğrulaması için CloakBrowser'ı açar,
+    doğrulamayı ve cf_clearance çerezini alır ve HEMEN KAPATIR.
+    Böylece Render.com 512MB RAM ortamında arka planda tarayıcı açık kalmaz
+    ve RAM tamamen serbest bırakılır.
+    """
+    if proxy and proxy.strip().lower() in ["none", "direct", "no", "off", ""]:
+        proxy = None
 
-    def _worker_loop(self):
-        print(f"[*] Browser Worker başlatılıyor... Proxy: {'Açık' if self.proxy else 'Kapalı'}", flush=True)
+    with _BROWSER_LOCK:
+        if log_callback:
+            log_callback("Cloudflare Turnstile doğrulaması için CloakBrowser açılıyor...", "registering", 12)
+        print(f"[*] Cloudflare Turnstile doğrulaması için CloakBrowser açılıyor... (Proxy: {'Açık' if proxy else 'Kapalı'})", flush=True)
+
         os.makedirs(PROFILE_DIR, exist_ok=True)
 
         context_kwargs = {
@@ -50,160 +48,109 @@ class BrowserManager:
                 "--no-sandbox",
             ],
         }
-        if self.proxy:
-            context_kwargs["proxy"] = self.proxy
+        if proxy:
+            context_kwargs["proxy"] = proxy
 
-        context = None
-        page = None
+        context = launch_persistent_context(**context_kwargs)
         try:
-            context = launch_persistent_context(**context_kwargs)
-            page = context.pages[0] if context.pages else context.new_page()
-            print("[+] CloakBrowser arka planda açıldı ve hazır bekliyor.", flush=True)
-        except Exception as init_err:
-            print(f"[!] CloakBrowser başlatma hatası: {init_err}", flush=True)
-        finally:
-            self.ready_event.set()
-
-        while True:
-            try:
-                task = self.task_queue.get()
-                if task is None:
+            # 1. Eski session çerezlerini temizle (temiz kayıt formu için)
+            for c in context.cookies():
+                if "appdeapiai" in c.get("name", "") or "session" in c.get("name", "").lower():
+                    try:
+                        context.clear_cookies()
+                    except Exception:
+                        pass
                     break
 
-                action = task.get("action")
-                reply_event = task.get("reply_event")
-                reply_data = task.get("reply_data")
-                log_callback = task.get("log_callback")
+            page = context.pages[0] if context.pages else context.new_page()
+            page.goto("https://app.deapi.ai/register", wait_until="domcontentloaded")
 
-                if action == "get_fresh_session":
+            t0 = time.time()
+            last_click_time = 0
+            clicked_logged = False
+
+            while time.time() - t0 < timeout:
+                try:
+                    title = page.title()
+                except Exception:
+                    title = ""
+
+                cookies_dict = {c["name"]: c["value"] for c in context.cookies()}
+
+                # Turnstile geçildi mi kontrol et
+                bypassed = False
+                if "Just a moment" not in title and "Bir dakika" not in title and ("Register" in title or "deAPI" in title or "Sign" in title or "Hesap" in title):
+                    bypassed = True
+                elif "cf_clearance" in cookies_dict:
+                    bypassed = True
+
+                if bypassed:
                     try:
-                        # Eğer tarayıcı kapandıysa yeniden ayağa kaldır
-                        if context is None or page is None or page.is_closed():
-                            context = launch_persistent_context(**context_kwargs)
-                            page = context.pages[0] if context.pages else context.new_page()
+                        content = page.content()
+                        if "wire:snapshot" in content or "csrf-token" in content:
+                            print(f"[+] Turnstile başarıyla geçildi! Başlık: '{title}'", flush=True)
+                            break
+                    except Exception:
+                        if bypassed:
+                            break
 
-                        # 1. Eski session çerezlerini temizle (temiz kayıt formu için)
-                        for c in context.cookies():
-                            if "appdeapiai" in c["name"] or "session" in c["name"].lower():
-                                try:
-                                    context.clear_cookies()
-                                except Exception:
-                                    pass
-                                break
-
-                        if log_callback:
-                            log_callback("Cloudflare Turnstile doğrulaması yapılıyor...", "registering", 12)
-                        print("[*] Kayıt sayfasına gidiliyor ve Turnstile çözülüyor...", flush=True)
-                        page.goto("https://app.deapi.ai/register", wait_until="domcontentloaded")
-
-                        t0 = time.time()
-                        last_click_time = 0
-                        clicked_logged = False
-
-                        while time.time() - t0 < self.timeout:
+                # Cloudflare Turnstile iframe ve checkbox tıklama
+                now = time.time()
+                if now - last_click_time >= 1.5:
+                    for frame in page.frames:
+                        if "challenges.cloudflare.com" in frame.url or "turnstile" in frame.url:
                             try:
-                                title = page.title()
+                                cb = frame.locator("input[type='checkbox'], .ctp-checkbox-label, #challenge-stage")
+                                if cb.count() > 0:
+                                    cb.first.click(timeout=1000)
+                                else:
+                                    frame.locator("body").click(timeout=1000)
+                                last_click_time = now
+                                if log_callback and not clicked_logged:
+                                    log_callback("Cloudflare Turnstile kutucuğu tıklandı, çözülüyor...", "registering", 15)
+                                    clicked_logged = True
+                                print("[*] Cloudflare kutusu tıklandı...", flush=True)
+                                break
                             except Exception:
-                                title = ""
-
-                            cookies_dict = {c["name"]: c["value"] for c in context.cookies()}
-
-                            # Turnstile geçildi mi kontrol et
-                            bypassed = False
-                            if "Just a moment" not in title and "Bir dakika" not in title and ("Register" in title or "deAPI" in title or "Sign" in title or "Hesap" in title):
-                                bypassed = True
-                            elif "cf_clearance" in cookies_dict:
-                                bypassed = True
-
-                            if bypassed:
                                 try:
-                                    content = page.content()
-                                    if "wire:snapshot" in content or "csrf-token" in content:
-                                        print(f"[+] Turnstile başarıyla geçildi! Başlık: '{title}'", flush=True)
-                                        break
+                                    frame.locator("body").click(timeout=1000)
+                                    last_click_time = now
+                                    break
                                 except Exception:
                                     pass
 
-                            # Cloudflare iframe'ini bul ve tıkla
-                            now = time.time()
-                            if now - last_click_time >= 1.5:
-                                for frame in page.frames:
-                                    if "challenges.cloudflare.com" in frame.url or "turnstile" in frame.url:
-                                        try:
-                                            cb = frame.locator("input[type='checkbox'], .ctp-checkbox-label, #challenge-stage")
-                                            if cb.count() > 0:
-                                                cb.first.click(timeout=1000)
-                                            else:
-                                                frame.locator("body").click(timeout=1000)
-                                            last_click_time = now
-                                            if log_callback and not clicked_logged:
-                                                log_callback("Cloudflare Turnstile kutucuğu tıklandı, çözülüyor...", "registering", 15)
-                                                clicked_logged = True
-                                            print("[*] Cloudflare kutusu tıklandı...", flush=True)
-                                            break
-                                        except Exception:
-                                            try:
-                                                frame.locator("body").click(timeout=1000)
-                                                last_click_time = now
-                                                print("[*] Cloudflare frame tıklandı...", flush=True)
-                                                break
-                                            except Exception:
-                                                pass
+                time.sleep(1)
 
-                            time.sleep(1)
+            # Cookiebot engelini kaldır
+            try:
+                page.evaluate("() => { const el = document.getElementById('CybotCookiebotDialog'); if(el) el.remove(); }")
+            except Exception:
+                pass
 
-                        # Cookiebot engelini kaldır
-                        try:
-                            page.evaluate("() => { const el = document.getElementById('CybotCookiebotDialog'); if(el) el.remove(); }")
-                        except Exception:
-                            pass
+            time.sleep(1.0)
+            cookies = {c["name"]: c["value"] for c in context.cookies()}
+            ua = page.evaluate("() => navigator.userAgent")
+            page_html = page.content()
 
-                        time.sleep(1.0)
-                        cookies = {c["name"]: c["value"] for c in context.cookies()}
-                        ua = page.evaluate("() => navigator.userAgent")
-                        page_html = page.content()
+            if "wire:snapshot" not in page_html and "csrf-token" not in page_html:
+                print("[*] Sayfa snapshot bulunamadı, bir kez reload deneniyor...", flush=True)
+                page.reload(wait_until="domcontentloaded")
+                time.sleep(2)
+                page_html = page.content()
+                cookies = {c["name"]: c["value"] for c in context.cookies()}
 
-                        if "wire:snapshot" not in page_html and "csrf-token" not in page_html:
-                            print("[*] Sayfa snapshot bulunamadı, bir kez reload deneniyor...", flush=True)
-                            page.reload(wait_until="domcontentloaded")
-                            time.sleep(2)
-                            page_html = page.content()
-                            cookies = {c["name"]: c["value"] for c in context.cookies()}
+            return {
+                "cookies": cookies,
+                "user_agent": ua,
+                "html": page_html,
+            }
 
-                        reply_data["result"] = {
-                            "cookies": cookies,
-                            "user_agent": ua,
-                            "html": page_html,
-                        }
-                    except Exception as e:
-                        reply_data["error"] = str(e)
-                    finally:
-                        reply_event.set()
-
-            except Exception as loop_err:
-                print(f"[!] Worker döngü hatası: {loop_err}", flush=True)
-
-        if context:
+        finally:
+            # Turnstile alındıktan sonra tarayıcıyı HEMEN KAPAT ve RAM'i serbest bırak
             try:
                 context.close()
             except Exception:
                 pass
-
-    def get_fresh_session(self, log_callback=None):
-        """Açık olan arka plan tarayıcısından taze Cloudflare Turnstile oturumu alır."""
-        self.ready_event.wait(timeout=30)
-        reply_event = threading.Event()
-        reply_data = {}
-        self.task_queue.put({
-            "action": "get_fresh_session",
-            "reply_event": reply_event,
-            "reply_data": reply_data,
-            "log_callback": log_callback
-        })
-        if not reply_event.wait(timeout=self.timeout + 30):
-            raise TimeoutError("Tarayıcıdan oturum bilgisi alma zaman aşımına uğradı.")
-
-        if "error" in reply_data:
-            raise RuntimeError(reply_data["error"])
-
-        return reply_data.get("result")
+            if log_callback:
+                log_callback("Tarayıcı kapatıldı, RAM serbest bırakıldı.", "registering", 18)
+            print("[+] CloakBrowser kapatıldı ve RAM tamamen serbest bırakıldı.", flush=True)
