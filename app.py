@@ -49,6 +49,8 @@ except ImportError:
 
 try:
     import deApiAI
+    if hasattr(deApiAI, "warmup_cf_session"):
+        threading.Thread(target=deApiAI.warmup_cf_session, daemon=True, name="TurnstileWarmup").start()
 except ImportError:
     deApiAI = None
 
