@@ -48,7 +48,11 @@ RUN python -c "import cloakbrowser; cloakbrowser.ensure_binary()"
 # Kodları kopyala
 COPY . .
 
+# Gerekli çalışma ve profil klasörlerini önceden oluştur
+RUN mkdir -p uploads outputs browser_profile scratch
+
 # Render $PORT ortam değişkenini dinler, varsayılan 10000
 EXPOSE 10000
 
-CMD ["sh", "-c", "gunicorn --workers 1 --threads 100 --timeout 0 -b 0.0.0.0:${PORT:-10000} app:app"]
+# Gunicorn master-worker çökmesi ve gunicorn.ctl restart döngüsünü önlemek için doğrudan Python ile başlat
+CMD ["python", "app.py"]
