@@ -55,7 +55,7 @@ import requests
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
 import cloakbrowser
-from browser_manager import fetch_turnstile_session_and_close
+from browser_manager import fetch_turnstile_session_and_close, _BROWSER_LOCK
 
 def _ensure_browser_binary():
     """
@@ -120,7 +120,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # ------------------------------------------------------------------------------
 # PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
-PROXY_MODE = 1
+PROXY_MODE = 0
 CLOAK_PROXY_URL = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 
 
@@ -147,47 +147,52 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
     Çerez yoksa veya bayatladıysa CloakBrowser açılır, Turnstile'ı çözer,
     çerezi alır ve HEMEN KAPANIR (RAM tamamen boşaltılır).
     """
-    cached_cookies = _CACHED_CF_SESSION.get("cookies")
-    cached_ua = _CACHED_CF_SESSION.get("ua")
+    with _BROWSER_LOCK:
+        cached_cookies = _CACHED_CF_SESSION.get("cookies")
+        cached_ua = _CACHED_CF_SESSION.get("ua")
 
-    if cached_cookies and cached_ua:
-        try:
-            if log_callback:
-                log_callback("Mevcut Cloudflare çerezi test ediliyor...", "registering", 11)
-            test_session = cffi_requests.Session(impersonate="chrome120")
-            if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
-                test_session.proxies = {"http": CLOAK_PROXY_URL.strip(), "https": CLOAK_PROXY_URL.strip()}
-            test_session.cookies.update(cached_cookies)
-            test_session.headers.update({
-                "user-agent": cached_ua,
-                "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-            })
-            resp = test_session.get("https://app.deapi.ai/register", timeout=15)
-            if resp.status_code == 200 and "wire:snapshot" in resp.text:
+        if cached_cookies and cached_ua:
+            try:
                 if log_callback:
-                    log_callback("Cloudflare çerezi hala taze! Doğrudan hızlı HTTP ile hesap açılıyor...", "registering", 15)
-                print("[+] Cloudflare çerezi hala geçerli, tarayıcı açılmadan doğrudan devam ediliyor.", flush=True)
-                return cached_cookies, cached_ua, resp.text
-            else:
-                print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), Turnstile için tarayıcı açılacak.", flush=True)
-        except Exception as e:
-            print(f"[!] Çerez test hatası: {e}, Turnstile için tarayıcı açılacak.", flush=True)
+                    log_callback("Mevcut Cloudflare çerezi test ediliyor...", "registering", 11)
+                test_session = cffi_requests.Session(impersonate="chrome120")
+                if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
+                    test_session.proxies = {"http": CLOAK_PROXY_URL.strip(), "https": CLOAK_PROXY_URL.strip()}
+                test_session.cookies.update(cached_cookies)
+                test_session.headers.update({
+                    "user-agent": cached_ua,
+                    "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+                })
+                resp = test_session.get("https://app.deapi.ai/register", timeout=15)
+                if resp.status_code == 200 and "wire:snapshot" in resp.text:
+                    if log_callback:
+                        log_callback("Cloudflare çerezi hala taze! Doğrudan hızlı HTTP ile hesap açılıyor...", "registering", 15)
+                    print("[+] Cloudflare çerezi hala geçerli, tarayıcı açılmadan doğrudan devam ediliyor.", flush=True)
+                    return cached_cookies, cached_ua, resp.text
+                else:
+                    print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), Turnstile için tarayıcı açılacak.", flush=True)
+            except Exception as e:
+                print(f"[!] Çerez test hatası: {e}, Turnstile için tarayıcı açılacak.", flush=True)
 
-    # Çerez yok veya bayatlamış -> CloakBrowser açılır, Turnstile'ı çözer ve HEMEN KAPANIR
-    if log_callback:
-        log_callback("Cloudflare Turnstile çözülüyor (işlem sonrası tarayıcı kapanacak)...", "registering", 12)
-    proxy = CLOAK_PROXY_URL if PROXY_MODE == 1 else None
-    session_data = fetch_turnstile_session_and_close(proxy=proxy, log_callback=log_callback)
-    raw_cookies = session_data["cookies"]
-    ua = session_data["user_agent"]
-    page_html = session_data["html"]
+        # Çerez yok veya bayatlamış -> CloakBrowser açılır, Turnstile'ı çözer ve HEMEN KAPANIR
+        if log_callback:
+            log_callback("Cloudflare Turnstile çözülüyor (işlem sonrası tarayıcı kapanacak)...", "registering", 12)
 
-    # Sadece Cloudflare çerezlerini önbelleğe kaydet
-    cf_cookies = {k: v for k, v in raw_cookies.items() if "cf" in k.lower()}
-    _CACHED_CF_SESSION["cookies"] = cf_cookies if cf_cookies else raw_cookies
-    _CACHED_CF_SESSION["ua"] = ua
-    _CACHED_CF_SESSION["created_at"] = time.time()
-    return raw_cookies, ua, page_html
+        proxy = CLOAK_PROXY_URL if PROXY_MODE == 1 else None
+        session_data = fetch_turnstile_session_and_close(
+            proxy=proxy,
+            log_callback=log_callback
+        )
+        raw_cookies = session_data["cookies"]
+        ua = session_data["user_agent"]
+        page_html = session_data.get("html", "")
+
+        # Sadece Cloudflare çerezlerini önbelleğe kaydet
+        cf_cookies = {k: v for k, v in raw_cookies.items() if "cf" in k.lower()}
+        _CACHED_CF_SESSION["cookies"] = cf_cookies if cf_cookies else raw_cookies
+        _CACHED_CF_SESSION["ua"] = ua
+        _CACHED_CF_SESSION["created_at"] = time.time()
+        return raw_cookies, ua, page_html
 
 def warmup_cf_session():
     """
