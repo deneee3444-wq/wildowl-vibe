@@ -3915,7 +3915,7 @@
             if (state.stopped || !jobs.has(id)) return;
 
             state.controller = new AbortController();
-            let delay = 2500;
+            let delay = 1000;
 
             try {
                 const data = await api(
