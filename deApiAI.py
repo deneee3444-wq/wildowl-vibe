@@ -120,7 +120,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # ------------------------------------------------------------------------------
 # PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
-PROXY_MODE = 1
+PROXY_MODE = 0
 CLOAK_PROXY_URL = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 
 
@@ -140,7 +140,7 @@ def _random_password():
     chars = string.ascii_letters + string.digits
     return "DeApi#" + "".join(secrets.choice(chars) for _ in range(8)) + "1"
 
-def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], None]] = None) -> Tuple[Dict[str, str], str, str]:
+def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], None]] = None) -> Tuple[Any, str, str]:
     """
     Eğer bellekteki cf_clearance çerezleri hala geçerliyse doğrudan curl_cffi ile
     hızlıca register sayfasını çeker (1 saniyede biter, tarayıcıya dokunmaz).
@@ -164,11 +164,11 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
                     "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
                 })
                 resp = test_session.get("https://app.deapi.ai/register", timeout=15)
-                if resp.status_code == 200 and "wire:snapshot" in resp.text:
+                if resp.status_code == 200 and "wire:snapshot" in resp.text and "csrf-token" in resp.text:
                     if log_callback:
                         log_callback("Cloudflare çerezi hala taze! Doğrudan hızlı HTTP ile hesap açılıyor...", "registering", 15)
                     print("[+] Cloudflare çerezi hala geçerli, tarayıcı açılmadan doğrudan devam ediliyor.", flush=True)
-                    return cached_cookies, cached_ua, resp.text
+                    return test_session, resp.text, cached_ua
                 else:
                     print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), Turnstile için tarayıcı açılacak.", flush=True)
             except Exception as e:
@@ -192,7 +192,16 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
         _CACHED_CF_SESSION["cookies"] = cf_cookies if cf_cookies else raw_cookies
         _CACHED_CF_SESSION["ua"] = ua
         _CACHED_CF_SESSION["created_at"] = time.time()
-        return raw_cookies, ua, page_html
+
+        fresh_session = cffi_requests.Session(impersonate="chrome120")
+        if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
+            fresh_session.proxies = {"http": CLOAK_PROXY_URL.strip(), "https": CLOAK_PROXY_URL.strip()}
+        fresh_session.cookies.update(raw_cookies)
+        fresh_session.headers.update({
+            "user-agent": ua,
+            "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
+        })
+        return fresh_session, page_html, ua
 
 def warmup_cf_session():
     """
@@ -213,19 +222,10 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
     kaydı tamamlar, e-postayı onaylar ve $5 bakiyeli yeni API anahtarı üretir.
     Çerez taze ise tarayıcı açılmaz!
     """
-    cookies, ua, register_html = _get_or_refresh_cf_session(log_callback)
+    session, register_html, ua = _get_or_refresh_cf_session(log_callback)
 
     if log_callback:
         log_callback("Geçici e-posta kutusu oluşturuluyor ve kayıt formu iletiliyor...", "registering", 20)
-
-    session = cffi_requests.Session(impersonate="chrome120")
-    if PROXY_MODE == 1 and CLOAK_PROXY_URL and CLOAK_PROXY_URL.strip().lower() not in ["none", "direct", "no", "off", ""]:
-        session.proxies = {"http": CLOAK_PROXY_URL.strip(), "https": CLOAK_PROXY_URL.strip()}
-    session.cookies.update(cookies)
-    session.headers.update({
-        "user-agent": ua,
-        "accept-language": "tr-TR,tr;q=0.9,en-US;q=0.8,en;q=0.7",
-    })
 
     soup = BeautifulSoup(register_html, "html.parser")
     csrf_token_tag = soup.find("meta", {"name": "csrf-token"})
@@ -263,12 +263,14 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
     lw_headers = {
         "content-type": "application/json",
         "x-livewire": "1",
+        "x-csrf-token": csrf_token,
         "referer": "https://app.deapi.ai/register",
         "origin": "https://app.deapi.ai",
         "accept": "*/*",
     }
     r_post = session.post(update_uri, json=payload, headers=lw_headers)
     if r_post.status_code != 200:
+        _CACHED_CF_SESSION.clear()
         raise RuntimeError(f"Kayıt isteği başarısız oldu: HTTP {r_post.status_code}")
 
     # 2. Doğrulama e-postasını bekle
