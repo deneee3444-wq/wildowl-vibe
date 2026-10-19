@@ -24,11 +24,11 @@ deAPI VİDEO KURALLARI & NORMALİZASYON DEĞERLERİ (ÖZET REFERANS):
 
 3. Model Limitleri & RPD (Requests Per Day):
    - Hız Sınırı: Her iki modelde de 1 RPM (dakikada 1 istek).
-   - MiniMax M3: RPD = 3 (Hesap başına günlük 3 video).
+   - MiniMax H3: RPD = 3 (Hesap başına günlük 3 video).
    - LTX 2.5:    RPD = 15 (Hesap başına günlük 15 video), payload'da steps: 1 zorunludur.
 
 4. Medya Referans Kuralları:
-   - MiniMax M3: En fazla 3 referans medya (görsel + video + ses <= 3).
+   - MiniMax H3: En fazla 3 referans medya (görsel + video + ses <= 3).
      * Görsel maks 3 (ref_images[0..2]), Video maks 1 (ref_videos[0]), Ses maks 1 (ref_audios[0]).
      * Ses referansı tek başına verilemez (yanında en az 1 görsel veya video şart).
    - LTX 2.5: Sadece Start veya Start+End Keyframe kabul eder. Harici ses veya video referansı almaz.
@@ -78,8 +78,8 @@ BASE_URL = "https://api.deapi.ai/api/v2"
 
 # Model Eşlemeleri
 MODEL_SLUGS = {
-    "MiniMax M3 Video": "MiniMaxH3_33B_Turbo_INT8",
-    "MiniMax M3": "MiniMaxH3_33B_Turbo_INT8",
+    "MiniMax H3 Video": "MiniMaxH3_33B_Turbo_INT8",
+    "MiniMax H3": "MiniMaxH3_33B_Turbo_INT8",
     "MiniMaxH3_33B_Turbo_INT8": "MiniMaxH3_33B_Turbo_INT8",
     "LTX 2.5 Video": "Ltx2_5_22B_Dist_INT8",
     "LTX 2.5": "Ltx2_5_22B_Dist_INT8",
@@ -120,7 +120,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # ------------------------------------------------------------------------------
 # PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
-PROXY_MODE = 1
+PROXY_MODE = 0
 CLOAK_PROXY_URL = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 
 
@@ -171,8 +171,10 @@ def _get_or_refresh_cf_session(log_callback: Optional[Callable[[str, str, int], 
                     return test_session, resp.text, cached_ua
                 else:
                     print(f"[*] Cloudflare çerezi bayatlamış (HTTP {resp.status_code}), Turnstile için tarayıcı açılacak.", flush=True)
+                    _CACHED_CF_SESSION.clear()
             except Exception as e:
                 print(f"[!] Çerez test hatası: {e}, Turnstile için tarayıcı açılacak.", flush=True)
+                _CACHED_CF_SESSION.clear()
 
         # Çerez yok veya bayatlamış -> CloakBrowser açılır, Turnstile'ı çözer ve HEMEN KAPANIR
         if log_callback:
@@ -216,7 +218,7 @@ def warmup_cf_session():
     except Exception as e:
         print(f"[!] [Boot Warmup] Ön ısıtma hatası (ilk işlemde tekrar denenecek): {e}", flush=True)
 
-def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
+def _create_single_account(log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
     """
     Tarayıcıdan alınan çerezlerle arka planda otomatik geçici e-posta alır,
     kaydı tamamlar, e-postayı onaylar ve $5 bakiyeli yeni API anahtarı üretir.
@@ -269,9 +271,9 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
         "accept": "*/*",
     }
     r_post = session.post(update_uri, json=payload, headers=lw_headers)
-    if r_post.status_code != 200:
+    if r_post.status_code != 200 or ("verify-email" not in r_post.text and "redirect" not in r_post.text):
         _CACHED_CF_SESSION.clear()
-        raise RuntimeError(f"Kayıt isteği başarısız oldu: HTTP {r_post.status_code}")
+        raise RuntimeError(f"Kayıt isteği başarısız oldu (HTTP {r_post.status_code})")
 
     # 2. Doğrulama e-postasını bekle
     if log_callback:
@@ -280,7 +282,13 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
 
     verify_url = None
     t_start = time.time()
+    last_log_t = t_start
     while time.time() - t_start < 90:
+        elapsed_sec = int(time.time() - t_start)
+        if log_callback and (time.time() - last_log_t >= 4):
+            last_log_t = time.time()
+            log_callback(f"Aktivasyon e-postası bekleniyor ({elapsed_sec} sn)... (Kutu: {box})", "registering", 23)
+
         try:
             m_res = requests.get(
                 "https://od2.in/api/get-email",
@@ -290,7 +298,7 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
                     "accept": "*/*",
                     "referer": f"https://od2.in/temp-mail?id={box}",
                 },
-                timeout=15
+                timeout=10
             ).json()
             if m_res and isinstance(m_res, list) and len(m_res) > 0:
                 for item in m_res:
@@ -302,7 +310,7 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
                             "https://od2.in/api/get-email",
                             params={"emailId": email_id},
                             headers={"user-agent": "Mozilla/5.0"},
-                            timeout=15
+                            timeout=10
                         ).json()
                         content = (msg.get("text") or "") + "\n" + (msg.get("html") or "")
                         match = re.search(r'https://app\.deapi\.ai/verify-email/[^\s"\'<>]+', content)
@@ -317,7 +325,7 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
                     break
         except Exception:
             pass
-        time.sleep(3)
+        time.sleep(2)
 
     if not verify_url:
         raise RuntimeError("Doğrulama e-postası zamanında gelmedi.")
@@ -367,6 +375,24 @@ def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], N
         log_callback("Yeni deAPI hesabı açıldı! API Key hazır.", "success", 28)
 
     return api_key
+
+def _create_new_deapi_account(log_callback: Optional[Callable[[str, str, int], None]] = None) -> str:
+    """
+    Kayıt işlemini yürütür. Önce mevcut taze çerezi dener (tarayıcısız).
+    Eğer çerez bayatsa veya kayıt aşamasında beklenmedik bir engel çıkarsa,
+    hafızadaki çerezi anında temizleyip tarayıcı (CloakBrowser) ile taze oturum alarak
+    otomatik olarak işlemi başarıyla tamamlar.
+    """
+    for attempt in range(2):
+        try:
+            return _create_single_account(log_callback)
+        except Exception as e:
+            _CACHED_CF_SESSION.clear()
+            if attempt == 1:
+                raise
+            print(f"[!] Hesap açma denemesi başarısız oldu ({e}), tarayıcı ile taze oturum deneniyor...", flush=True)
+            if log_callback:
+                log_callback("Oturum yenileniyor, taze Turnstile oturumu alınıyor...", "registering", 12)
 
 
 # ==============================================================================
@@ -437,7 +463,7 @@ def run_video(
     is_active: Optional[Callable[[], bool]] = None
 ) -> Dict[str, Any]:
     """
-    deAPI üzerinden MiniMax M3 veya LTX 2.5 video modelini çalıştırır.
+    deAPI üzerinden MiniMax H3 veya LTX 2.5 video modelini çalıştırır.
     İş akışı:
       1. Her video görevi için taze bir deAPI hesabı oluşturulur (tek hesap, tek kullanım).
       2. Görevler bağımsız ve beklemesiz çalışır.
@@ -511,7 +537,8 @@ def run_video(
     if log_callback:
         mode_desc = []
         if ref_mode == "frames":
-            mode_desc.append("Start/End Keyframe")
+            if valid_images:
+                mode_desc.append("Start/End Keyframe")
         else:
             if valid_images:
                 mode_desc.append(f"{min(3, len(valid_images))} Görsel")
@@ -529,9 +556,8 @@ def run_video(
         if is_active and not is_active():
             return {"error": "İşlem iptal edildi."}
 
-        # Tek hesap, tek kullanım: Her video işlemi için doğrudan taze deAPI hesabı açılır
-        with _ACCOUNT_CREATION_LOCK:
-            api_key = _create_new_deapi_account(log_callback=log_callback)
+        # Tek hesap, tek kullanım: Her video işlemi için doğrudan bağımsız taze deAPI hesabı açılır
+        api_key = _create_new_deapi_account(log_callback=log_callback)
 
         max_send_attempts = 4
         for attempt in range(max_send_attempts):
@@ -612,8 +638,7 @@ def run_video(
             if resp.status_code in (401, 403):
                 if log_callback:
                     log_callback("API Anahtarı yetkisiz (401/403). Yeni deAPI hesabı açılıyor...", "warning", 10)
-                with _ACCOUNT_CREATION_LOCK:
-                    api_key = _create_new_deapi_account(log_callback=log_callback)
+                api_key = _create_new_deapi_account(log_callback=log_callback)
                 continue
 
             # Başarılı istek
