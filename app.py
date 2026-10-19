@@ -59,7 +59,7 @@ try:
 except ImportError:
     # Fallback config if import fails
     MODELS_CONFIG = {
-        "MiniMax M3 Video": {
+        "MiniMax H3 Video": {
             "model_id": "MiniMaxH3_33B_Turbo_INT8",
             "model_slug": "MiniMaxH3_33B_Turbo_INT8",
             "type": "video",
@@ -1460,8 +1460,8 @@ def run_job_in_background(job_id):
                                 pass
                 return
 
-        # DEAPI VIDEO HANDLER (MiniMax M3 Video & LTX 2.5 Video)
-        if model_name in ["MiniMax M3 Video", "LTX 2.5 Video"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "deapi"):
+        # DEAPI VIDEO HANDLER (MiniMax H3 Video & LTX 2.5 Video)
+        if model_name in ["MiniMax H3 Video", "LTX 2.5 Video"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "deapi"):
             if not deApiAI:
                 add_log("deAPI AI modülü yüklenemedi!", "error", 5)
                 if job_id in ACTIVE_JOBS:
