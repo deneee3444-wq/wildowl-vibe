@@ -120,7 +120,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # ------------------------------------------------------------------------------
 # PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
-PROXY_MODE = 1
+PROXY_MODE = 0
 CLOAK_PROXY_URL = os.environ.get("PROXY", "http://tghpxuwn:dxrsnpsyz3df@45.38.107.97:6014")
 
 
@@ -236,10 +236,17 @@ def _create_single_account(log_callback: Optional[Callable[[str, str, int], None
     if not elem:
         raise RuntimeError("Livewire snapshot register sayfasında bulunamadı.")
     raw_snapshot = elem["wire:snapshot"]
-    update_uri_match = re.search(r'data-update-uri="([^"]+)"', register_html)
-    if not update_uri_match:
-        raise RuntimeError("data-update-uri register sayfasında bulunamadı.")
-    update_uri = update_uri_match.group(1)
+    lw_script = soup.find("script", attrs={"data-update-uri": True})
+    if lw_script:
+        update_uri = lw_script["data-update-uri"]
+        csrf_token = lw_script.get("data-csrf") or csrf_token
+    else:
+        update_uri_match = re.search(r'data-update-uri="([^"]+)"', register_html)
+        if not update_uri_match:
+            raise RuntimeError("data-update-uri register sayfasında bulunamadı.")
+        update_uri = update_uri_match.group(1)
+    if update_uri.startswith("/"):
+        update_uri = "https://app.deapi.ai" + update_uri
 
     box = _random_box()
     email = f"{box}@tm.od2.in"
@@ -317,7 +324,8 @@ def _create_single_account(log_callback: Optional[Callable[[str, str, int], None
                         if not match:
                             match = re.search(r'https?://[^\s"\'<>]*verify-email[^\s"\'<>]*', content)
                         if match:
-                            verify_url = html.unescape(match.group(0))
+                            raw_url = html.unescape(match.group(0))
+                            verify_url = raw_url.rstrip("])}>.,;\"'")
                             break
                     except Exception:
                         pass
@@ -340,15 +348,24 @@ def _create_single_account(log_callback: Optional[Callable[[str, str, int], None
     soup_keys = BeautifulSoup(r_keys.text, "html.parser")
     csrf_tag = soup_keys.find("meta", {"name": "csrf-token"})
     csrf_keys = csrf_tag.get("content") if csrf_tag else ""
+
+    lw_keys_script = soup_keys.find("script", attrs={"data-update-uri": True})
+    if lw_keys_script:
+        update_uri_keys = lw_keys_script["data-update-uri"]
+        csrf_keys = lw_keys_script.get("data-csrf") or csrf_keys
+    else:
+        update_uri_keys_match = re.search(r'data-update-uri="([^"]+)"', r_keys.text)
+        if not update_uri_keys_match:
+            raise RuntimeError("API Keys sayfasında update URI bulunamadı.")
+        update_uri_keys = update_uri_keys_match.group(1)
+    if update_uri_keys.startswith("/"):
+        update_uri_keys = "https://app.deapi.ai" + update_uri_keys
+
     elem_keys = soup_keys.find("section", {"wire:name": "settings.api-keys"})
     if not elem_keys:
         elem_keys = soup_keys.find(attrs={"wire:snapshot": True})
 
     raw_snap_keys = elem_keys["wire:snapshot"]
-    update_uri_keys_match = re.search(r'data-update-uri="([^"]+)"', r_keys.text)
-    if not update_uri_keys_match:
-        raise RuntimeError("API Keys sayfasında update URI bulunamadı.")
-    update_uri_keys = update_uri_keys_match.group(1)
 
     key_payload = {
         "_token": csrf_keys,
