@@ -121,7 +121,7 @@ _ACCOUNT_CREATION_LOCK = threading.Lock()
 # PROXY_MODE: 0 -> Kapalı (Lokal testlerde proxy kullanmaz)
 #             1 -> Açık   (Render.com vb. sunucularda Cloudflare Turnstile & 403 aşımı için)
 PROXY_MODE = 1
-CLOAK_PROXY_URL = os.environ.get("PROXY", "http://nsmgwkzk-1:oqsyd4iar1l6@p.webshare.io:80")
+CLOAK_PROXY_URL = os.environ.get("PROXY", "http://nsmgwkzk-2:oqsyd4iar1l6@p.webshare.io:80")
 
 
 # ==============================================================================
