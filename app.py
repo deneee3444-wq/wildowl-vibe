@@ -359,7 +359,7 @@ except ImportError:
             )
 
         def getEmail(self):
-            return self.random_email(15) + '@spamok.com'
+            return self.random_email(15) + '@solarflarecorp.com'
 
         def get_email(self):
             return self.getEmail()
@@ -368,7 +368,7 @@ except ImportError:
             return self.getConfirmLink(mail, timeout=max_retries)
 
         def getConfirmLink(self, mail, timeout=30):
-            address = mail.replace('@spamok.com', '')
+            address = mail.split('@')[0]
             for _ in range(timeout):
                 try:
                     r = requests.get(f'https://api.spamok.com/v2/EmailBox/{address}', timeout=5)
@@ -1570,8 +1570,7 @@ def run_job_in_background(job_id):
         signup_url = "https://vskypkjrqdawuecizqph.supabase.co/auth/v1/signup"
         params = {"redirect_to": "https://wildowl.ai"}
         headers = {
-            "apikey": "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZza3lwa2pycWRhd3VlY2l6cXBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODY5MzcsImV4cCI6MjA5Nzg2MjkzN30.lJ3H-8XdbSXoUPordGC0oF0RvDZJoOue4SZ729gvBA8",
-            "authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZza3lwa2pycWRhd3VlY2l6cXBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODY5MzcsImV4cCI6MjA5Nzg2MjkzN30.lJ3H-8XdbSXoUPordGC0oF0RvDZJoOue4SZ729gvBA8",
+            "apikey": "sb_publishable_JMp6RT7orAG20nHNDt5F5A_ep6l_Cx7",
             "content-type": "application/json;charset=UTF-8",
             "origin": "https://wildowl.ai",
             "referer": "https://wildowl.ai/",
@@ -1618,7 +1617,7 @@ def run_job_in_background(job_id):
         
         # Step 2: Supabase Login
         add_log("Wild Owl hesabına giriş yapılıyor...", "login", 45)
-        API_KEY = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InZza3lwa2pycWRhd3VlY2l6cXBoIiwicm9sZSI6ImFub24iLCJpYXQiOjE3ODIyODY5MzcsImV4cCI6MjA5Nzg2MjkzN30.lJ3H-8XdbSXoUPordGC0oF0RvDZJoOue4SZ729gvBA8"
+        API_KEY = "sb_publishable_JMp6RT7orAG20nHNDt5F5A_ep6l_Cx7"
         login_url = "https://vskypkjrqdawuecizqph.supabase.co/auth/v1/token?grant_type=password"
         login_headers = {
             "apikey": API_KEY,
