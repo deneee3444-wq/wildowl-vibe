@@ -207,6 +207,13 @@ except ImportError:
             "resolutions": ["1k", "2k", "4k"],
             "resolution": "2k"
         },
+        "MiniMax H3 Image": {
+            "model_id": "minimax-h3-image",
+            "tiers": ["standard"],
+            "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+            "resolutions": ["1K", "2K"],
+            "resolution": "1K"
+        },
         "Wan 2.7": {
             "model_id": "wan-2.7-image",
             "tiers": ["standard", "pro"],
