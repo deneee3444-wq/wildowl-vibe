@@ -11,6 +11,466 @@ import requests
 import threading
 from flask import Flask, render_template, request, jsonify, Response, session, redirect, url_for
 
+from bs4 import BeautifulSoup
+
+# ==============================================================================
+# MYEDIT ONLINE ALTYAPI VE KRIPTOGRAFİK YARDIMCILAR (temp-mail.asia)
+# ==============================================================================
+
+# İSTEDİĞİN DOMAİNLERİ BURAYA GİREBİLİRSİN
+# CyberLink ile stabil çalıştığı test edilen domainler listenin başındadır.
+WHITELIST_DOMAINS = [
+    "umail.asia",
+    "cmail.asia",
+    "tempmailt.com",
+    "t-mail.asia",
+    "okyre.com",
+    "asia.banglatip.com",
+    "pmail.asia",
+    "1mail.edu.pl",
+    "asia.1maill.com",
+    "bd.1maill.com",
+    "in.1maill.com",
+    "bd.5secmail.com",
+    "in.5secmail.com",
+    "ng.5secmail.com",
+    "asia.5secmail.com",
+]
+
+POLL_COMPONENTS = [
+    "frontend.components.action",
+    "frontend.components.token-login",
+    "frontend.components.check-mail",
+    "frontend.components.inbox-message",
+]
+
+
+def generate_random_username(length: int = 10) -> str:
+    """Belirtilen uzunlukta harf ve rakamlardan oluşan rastgele bir kullanıcı adı üretir."""
+    chars = string.ascii_lowercase + string.digits
+    return "".join(random.choices(chars, k=length))
+
+
+# ==============================================================================
+# TEMP MAIL PROXY AYARLARI (Render.com temp-mail.asia 403 Engeli İcin)
+# ==============================================================================
+# Render.com sunucularında temp-mail.asia IP engeline (403 Forbidden) takıldığı
+# için sadece temp mail isteklerine özel bu proxy alanı tanımlanmıştır.
+# Temp mail dışındaki CyberLink, resim, video vb. hiçbir istek bu proxy'yi KULLANMAZ.
+#
+# TEMP_MAIL_PROXY_MODE (Proxy Durumu):
+#   1 -> Temp mail istekleri Webshare proxy üzerinden geçer (Render.com için 1 yapın).
+#   0 -> Proxy devre dışı kalır, doğrudan sunucu IP'si üzerinden bağlanır.
+TEMP_MAIL_PROXY_MODE = 1
+
+TEMP_MAIL_PROXY_CONFIG = {
+    "http": "http://nrrbciri-1:5cauzsujeluf@p.webshare.io:80",
+    "https": "http://nrrbciri-1:5cauzsujeluf@p.webshare.io:80",
+}
+
+
+def apply_temp_mail_proxy(session: requests.Session):
+    """Sadece TempMailClient oturumuna proxy uygular.
+    
+    İleride proxy'yi tamamen kaldırmak isterseniz bu bloğu ve TempMailClient
+    içindeki apply_temp_mail_proxy(self.session) satırını silmeniz yeterlidir.
+    """
+    if TEMP_MAIL_PROXY_MODE == 1 and TEMP_MAIL_PROXY_CONFIG:
+        session.proxies.update(TEMP_MAIL_PROXY_CONFIG)
+# ==============================================================================
+
+
+class TempMailClient:
+    """temp-mail.asia Livewire Entegrasyonu"""
+
+    BASE_URL = "https://temp-mail.asia"
+
+    def __init__(self, domain: str = None):
+        self.domain = domain
+        self.box = None
+        self.email = None
+        self.session = requests.Session()
+        apply_temp_mail_proxy(self.session)
+        self.csrf = None
+        self.components = {}
+        self.lw_headers = {}
+        self._seen_ids = set()
+
+    def get_email(self, length: int = 10, domain: str = None) -> str:
+        """Yeni bir geçici e-posta adresi üretir ve temp-mail.asia oturumuna bağlar."""
+        if domain:
+            self.domain = domain
+        elif not self.domain and WHITELIST_DOMAINS:
+            self.domain = WHITELIST_DOMAINS[0]
+
+        init_headers = {
+            "Accept": (
+                "text/html,application/xhtml+xml,application/xml;q=0.9,"
+                "image/avif,image/webp,image/apng,*/*;q=0.8"
+            ),
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "tr-TR,tr;q=0.9",
+            "User-Agent": (
+                "Mozilla/5.0 (Windows NT 10.0; Win64; x64) "
+                "AppleWebKit/537.36 (KHTML, like Gecko) "
+                "Chrome/147.0.0.0 Safari/437.36"
+            ),
+            "upgrade-insecure-requests": "1",
+        }
+
+        resp = self.session.get(f"{self.BASE_URL}/", headers=init_headers, timeout=30)
+        resp.raise_for_status()
+        html = resp.text
+
+        csrf_match = re.search(r'data-csrf=["\']([^"\']+)["\']', html)
+        email_match = re.search(r"const email\s*=\s*'([^']+)'", html)
+        self.csrf = csrf_match.group(1) if csrf_match else None
+        default_email = email_match.group(1) if email_match else None
+
+        soup = BeautifulSoup(html, "html.parser")
+        self.components = {}
+        for el in soup.find_all(attrs={"wire:snapshot": True}):
+            raw_snap = el.get("wire:snapshot", "")
+            try:
+                snap_data = json.loads(raw_snap)
+                name = snap_data.get("memo", {}).get("name", "")
+                if name:
+                    self.components[name] = {"snapshot": raw_snap, "name": name}
+            except Exception:
+                pass
+
+        self.lw_headers = {
+            "Accept": "*/*",
+            "Accept-Encoding": "gzip, deflate",
+            "Accept-Language": "tr-TR,tr;q=0.9",
+            "Content-Type": "application/json",
+            "Origin": self.BASE_URL,
+            "Referer": f"{self.BASE_URL}/",
+            "User-Agent": init_headers["User-Agent"],
+            "x-livewire": "1",
+            "x-csrf-token": self.csrf,
+        }
+
+        if self.domain:
+            self.box = generate_random_username(length)
+            target_email = f"{self.box}@{self.domain}"
+
+            check_mail_comp = self.components.get("frontend.components.check-mail")
+            if check_mail_comp and self.csrf:
+                change_payload = {
+                    "_token": self.csrf,
+                    "components": [
+                        {
+                            "snapshot": check_mail_comp["snapshot"],
+                            "updates": {
+                                "username": self.box,
+                                "domain": self.domain,
+                            },
+                            "calls": [
+                                {
+                                    "method": "checkEmailAddress",
+                                    "params": [],
+                                    "metadata": {},
+                                }
+                            ],
+                        }
+                    ],
+                }
+                try:
+                    change_resp = self.session.post(
+                        f"{self.BASE_URL}/livewire/update",
+                        headers=self.lw_headers,
+                        json=change_payload,
+                        timeout=30,
+                    )
+                    if change_resp.ok:
+                        for c in change_resp.json().get("components", []):
+                            if c.get("snapshot"):
+                                self.components["frontend.components.check-mail"]["snapshot"] = c["snapshot"]
+                        self.email = target_email
+                    else:
+                        self.email = default_email or target_email
+                except Exception as e:
+                    print(f"[Temp Mail] checkEmailAddress uyarisi: {e}")
+                    self.email = default_email or target_email
+            else:
+                self.email = default_email or target_email
+        else:
+            self.email = default_email
+
+        print(f"[Temp Mail] Olusturuldu: {self.email}")
+        return self.email
+
+    def _build_poll_payload(self) -> dict:
+        api_components = []
+        for name in POLL_COMPONENTS:
+            comp = self.components.get(name)
+            if not comp:
+                continue
+
+            if name == "frontend.components.inbox-message":
+                calls = [
+                    {
+                        "method": "__dispatch",
+                        "params": ["syncEmail", {"email": self.email}],
+                        "metadata": {},
+                    },
+                    {
+                        "method": "__dispatch",
+                        "params": ["fetchMessages", {}],
+                        "metadata": {},
+                    },
+                ]
+            else:
+                calls = [
+                    {
+                        "method": "__dispatch",
+                        "params": ["syncEmail", {"email": self.email}],
+                        "metadata": {},
+                    },
+                ]
+            api_components.append(
+                {
+                    "snapshot": comp["snapshot"],
+                    "updates": {},
+                    "calls": calls,
+                }
+            )
+        return {"_token": self.csrf, "components": api_components}
+
+    def _clean_url(self, url: str) -> str:
+        if not url:
+            return ""
+        import html as _html
+        u = _html.unescape(url).replace("&amp;", "&").strip()
+        changed = True
+        while changed:
+            changed = False
+            for end in ['&quot;', '&quot', '"', "'", '>', '<', ')', ']', ';']:
+                if u.endswith(end):
+                    u = u[:-len(end)].strip()
+                    changed = True
+        return u
+
+    def _extract_activation_link(self, text: str) -> str:
+        if not text:
+            return None
+        import html as _html
+        text = _html.unescape(text)
+
+        # 1. Supabase / WildOwl verify links
+        auth_links = re.findall(
+            r'https?://[^\s"\'<>]+(?:supabase\.co|wildowl\.ai)[^\s"\'<>]*(?:verify|confirm|token|signup)[^\s"\'<>]*',
+            text,
+            re.IGNORECASE,
+        )
+        for link in auth_links:
+            clean = self._clean_url(link)
+            if clean:
+                return clean
+
+        # 2. BeautifulSoup ile link ara
+        try:
+            soup = BeautifulSoup(text, "html.parser")
+            for a in soup.find_all("a", href=True):
+                clean = self._clean_url(a["href"])
+                if any(k in clean.lower() for k in ["verify", "confirm", "activate", "signup", "supabase"]):
+                    return clean
+        except Exception:
+            pass
+
+        # 3. CyberLink trace links
+        trace_links = re.findall(
+            r'https?://membership\.cyberlink\.com/prog/event/autoedm/trace_mem\.jsp\?[^\s"\'<>]+',
+            text,
+        )
+        for link in trace_links:
+            clean = self._clean_url(link)
+            if any(k in clean for k in ["account-activate", "Activate", "active-member"]):
+                return clean
+
+        # 4. Genel linkler
+        general_links = re.findall(
+            r'https?://[^\s"\'<>]+(?:activate|confirm|verify)[^\s"\'<>]*',
+            text,
+            re.IGNORECASE,
+        )
+        for link in general_links:
+            clean = self._clean_url(link)
+            if clean:
+                return clean
+
+        # 5. Fallback
+        all_urls = re.findall(r'https?://[^\s"\'<>]+', text)
+        for u in all_urls:
+            clean = self._clean_url(u)
+            if any(k in clean.lower() for k in ["verify", "confirm", "activate", "signup", "token"]):
+                return clean
+
+        if trace_links:
+            return self._clean_url(trace_links[0])
+
+        return None
+
+    def _extract_code(self, text: str) -> str:
+        codes = re.findall(r"\b\d{4,8}\b", text)
+        return codes[0] if codes else None
+
+    def _fetch_message_content(self, msg_id, inbox_snapshot) -> str:
+        view_payload = {
+            "_token": self.csrf,
+            "components": [
+                {
+                    "snapshot": inbox_snapshot,
+                    "updates": {},
+                    "calls": [{"method": "updateView", "params": [msg_id], "metadata": {}}],
+                }
+            ],
+        }
+        view_resp = self.session.post(
+            f"{self.BASE_URL}/livewire/update",
+            headers=self.lw_headers,
+            json=view_payload,
+            timeout=30,
+        )
+        if not view_resp.ok:
+            return ""
+
+        all_text = []
+        for comp_resp in view_resp.json().get("components", []):
+            effects_html = comp_resp.get("effects", {}).get("html", "")
+            if effects_html:
+                all_text.append(effects_html)
+            snap_str = comp_resp.get("snapshot", "")
+            if snap_str:
+                try:
+                    snap = json.loads(snap_str)
+                    msgs = snap.get("data", {}).get("messages", [])
+                    if msgs and isinstance(msgs[0], list):
+                        for group in msgs[0]:
+                            if isinstance(group, list):
+                                for m in group:
+                                    if isinstance(m, dict) and "content" in m:
+                                        all_text.append(m["content"])
+                except Exception:
+                    pass
+        return "\n".join(all_text)
+
+    def wait_for_activation_link(self, timeout: int = 60) -> str:
+        print(f"[Temp Mail] Gelen kutusu sorgulaniyor ({self.email})...")
+        deadline = time.time() + timeout
+        inbox_snapshot = None
+
+        while time.time() < deadline:
+            inbox_keys = []
+            try:
+                payload = self._build_poll_payload()
+                resp = self.session.post(
+                    f"{self.BASE_URL}/livewire/update",
+                    headers=self.lw_headers,
+                    json=payload,
+                    timeout=20,
+                )
+                if resp.ok:
+                    data = resp.json()
+                    resp_comps = data.get("components", [])
+                    active_names = [n for n in POLL_COMPONENTS if n in self.components]
+
+                    for i, rc in enumerate(resp_comps):
+                        new_snap = rc.get("snapshot", "")
+                        if not new_snap or i >= len(active_names):
+                            continue
+                        target_name = active_names[i]
+                        self.components[target_name]["snapshot"] = new_snap
+
+                        if target_name == "frontend.components.inbox-message":
+                            try:
+                                snap = json.loads(new_snap)
+                                inbox_msgs = snap.get("data", {}).get("inbox_messages", [])
+                                if isinstance(inbox_msgs, list):
+                                    for item in inbox_msgs:
+                                        if isinstance(item, dict) and "keys" in item:
+                                            inbox_keys = item["keys"]
+                                            inbox_snapshot = new_snap
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"[Temp Mail] Poll uyarisi: {e}")
+
+            unseen_keys = [k for k in inbox_keys if k not in self._seen_ids]
+            if unseen_keys:
+                for msg_id in unseen_keys:
+                    self._seen_ids.add(msg_id)
+                    print(f"[+] Yeni mail alindi! ID: {msg_id}")
+                    content = self._fetch_message_content(msg_id, inbox_snapshot)
+                    link = self._extract_activation_link(content)
+                    if link:
+                        print(f"  -> Aktivasyon linki bulundu: {link[:80]}...")
+                        return link
+
+            time.sleep(3)
+
+        raise TimeoutError("Aktivasyon maili gelmedi!")
+
+    def wait_for_code(self, timeout: int = 60) -> str:
+        print(f"[Temp Mail] Kod bekleniyor ({self.email})...")
+        deadline = time.time() + timeout
+        inbox_snapshot = None
+
+        while time.time() < deadline:
+            inbox_keys = []
+            try:
+                payload = self._build_poll_payload()
+                resp = self.session.post(
+                    f"{self.BASE_URL}/livewire/update",
+                    headers=self.lw_headers,
+                    json=payload,
+                    timeout=20,
+                )
+                if resp.ok:
+                    data = resp.json()
+                    resp_comps = data.get("components", [])
+                    active_names = [n for n in POLL_COMPONENTS if n in self.components]
+
+                    for i, rc in enumerate(resp_comps):
+                        new_snap = rc.get("snapshot", "")
+                        if not new_snap or i >= len(active_names):
+                            continue
+                        target_name = active_names[i]
+                        self.components[target_name]["snapshot"] = new_snap
+
+                        if target_name == "frontend.components.inbox-message":
+                            try:
+                                snap = json.loads(new_snap)
+                                inbox_msgs = snap.get("data", {}).get("inbox_messages", [])
+                                if isinstance(inbox_msgs, list):
+                                    for item in inbox_msgs:
+                                        if isinstance(item, dict) and "keys" in item:
+                                            inbox_keys = item["keys"]
+                                            inbox_snapshot = new_snap
+                            except Exception:
+                                pass
+            except Exception as e:
+                print(f"[Temp Mail] Poll uyarisi: {e}")
+
+            unseen_keys = [k for k in inbox_keys if k not in self._seen_ids]
+            if unseen_keys:
+                for msg_id in unseen_keys:
+                    self._seen_ids.add(msg_id)
+                    print(f"[+] Yeni mail alindi! ID: {msg_id}")
+                    content = self._fetch_message_content(msg_id, inbox_snapshot)
+                    code = self._extract_code(content)
+                    if code:
+                        print(f"[+] Dogrulama kodu bulundu: {code}")
+                        return code
+
+            time.sleep(3)
+
+        raise TimeoutError("Dogrulama kodu gelmedi!")
+
+
+
+
 # Ensure parent root directory is in sys.path to import vibeVideo
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
 ROOT_DIR = os.path.dirname(APP_DIR)
@@ -359,55 +819,24 @@ except ImportError:
     }
     
     class eTemp:
-        def random_email(self, length):
-            return ''.join(
-                random.SystemRandom().choice(string.ascii_lowercase + string.digits)
-                for _ in range(length)
-            )
-
-        def getEmail(self):
-            return self.random_email(15) + '@solarflarecorp.com'
+        def __init__(self):
+            self.client = TempMailClient()
 
         def get_email(self):
-            return self.getEmail()
+            return self.client.get_email()
 
-        def get_signup_url_from_inbox(self, mail, max_retries=30):
-            return self.getConfirmLink(mail, timeout=max_retries)
+        def getEmail(self):
+            return self.get_email()
+
+        def get_signup_url_from_inbox(self, mail=None, max_retries=30, timeout=60, **kwargs):
+            try:
+                return self.client.wait_for_activation_link(timeout=timeout or (max_retries * 2))
+            except Exception as e:
+                print(f"[✗] Onay maili alinamadi: {e}")
+                return None
 
         def getConfirmLink(self, mail, timeout=30):
-            address = mail.split('@')[0]
-            for _ in range(timeout):
-                try:
-                    r = requests.get(f'https://api.spamok.com/v2/EmailBox/{address}', timeout=5)
-                    data = r.json()
-                    for m in data.get('mails', []):
-                        if 'Confirm' in m.get('subject', '') or 'Wild Owl' in m.get('fromDisplay', '') or 'wildowl' in m.get('fromDisplay', '').lower():
-                            mail_id = m['id']
-                            email_r = requests.get(f'https://api.spamok.com/v2/Email/{address}/{mail_id}', timeout=5)
-                            detail = email_r.json()
-                            # Try plain text first (most reliable)
-                            plain = detail.get('messagePlain', '')
-                            if plain:
-                                urls = re.findall(r'https://[^\s\n]+', plain)
-                                if urls:
-                                    return urls[0]
-                            # Fallback to HTML
-                            html = detail.get('messageHtml', '')
-                            match = re.search(
-                                r'href="(https://vskypkjrqdawuecizqph\.supabase\.co/auth/v1/verify[^\"]+)"',
-                                html
-                            )
-                            if match:
-                                return match.group(1)
-                            links = re.findall(r'href="(https://vskypkjrqdawuecizqph\.supabase\.co/auth/v1/verify[^\"]+)"', html)
-                            if len(links) >= 2:
-                                return links[1]
-                            elif links:
-                                return links[0]
-                except Exception:
-                    pass
-                time.sleep(1)
-            return None
+            return self.get_signup_url_from_inbox(mail=mail, timeout=timeout)
 
 app = Flask(__name__)
 app.secret_key = "wild_owl_ai_studio_super_secret_key"
@@ -1566,7 +1995,7 @@ def run_job_in_background(job_id):
             return
         
         # Step 1: E-posta oluşturma ve kayıt
-        add_log("Spamok API üzerinden geçici e-posta alınıyor...", "registering", 10)
+        add_log("Temp mail & proxy üzerinden geçici e-posta alınıyor...", "registering", 10)
         temp = eTemp()
         email = temp.get_email()
         add_log(f"Geçici e-posta oluşturuldu: {email}", "registering", 15)
@@ -1604,20 +2033,32 @@ def run_job_in_background(job_id):
         
         if job_id not in ACTIVE_JOBS: return
         
-        add_log("Doğrulama e-postası bekleniyor (Spamok kutusu taranıyor, 30 saniye limit)...", "registering", 25)
+        add_log("Doğrulama e-postası bekleniyor (Temp mail kutusu taranıyor)...", "registering", 25)
         confirm_link = temp.get_signup_url_from_inbox(email, max_retries=30)
+        if confirm_link:
+            import html as _html
+            confirm_link = _html.unescape(confirm_link).replace("&amp;", "&").strip()
+            while any(confirm_link.endswith(s) for s in ['&quot;', '&quot', '"', "'", '>', ';']):
+                for s in ['&quot;', '&quot', '"', "'", '>', ';']:
+                    if confirm_link.endswith(s):
+                        confirm_link = confirm_link[:-len(s)].strip()
         
         if job_id not in ACTIVE_JOBS: return
         
         if not confirm_link:
-            add_log("Doğrulama e-postası zaman aşımına uğradı (Spamok 30s limit doldu).", "error", 25)
+            add_log("Doğrulama e-postası zaman aşımına uğradı.", "error", 25)
             if job_id in ACTIVE_JOBS:
                 ACTIVE_JOBS[job_id]['status'] = 'failed'
                 ACTIVE_JOBS[job_id]['error'] = 'E-posta doğrulama linki bulunamadı.'
             return
             
         add_log(f"Onay linki yakalandı: {confirm_link}", "registering", 35)
-        confirm_res = requests.get(confirm_link, allow_redirects=True, timeout=10)
+        headers_ver = {
+            "user-agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/156.0.0.0 Safari/537.36",
+            "origin": "https://wildowl.ai",
+            "referer": "https://wildowl.ai/",
+        }
+        confirm_res = requests.get(confirm_link, headers=headers_ver, allow_redirects=True, timeout=15)
         add_log(f"E-posta başarıyla onaylandı (Sunucu yanıtı: {confirm_res.status_code})", "registering", 40)
         
         if job_id not in ACTIVE_JOBS: return
