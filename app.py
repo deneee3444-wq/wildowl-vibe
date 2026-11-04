@@ -512,6 +512,11 @@ try:
 except ImportError:
     deApiAI = None
 
+try:
+    import pixelBunnyAI_image
+except ImportError:
+    pixelBunnyAI_image = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -876,6 +881,13 @@ def logout():
 def get_models():
     if not is_logged_in():
         return jsonify({'error': 'Unauthorized'}), 401
+    service = request.args.get('service', '').strip().lower()
+    if service == 'pixelbunny' and pixelBunnyAI_image:
+        combined = dict(MODELS_CONFIG)
+        for k, v in pixelBunnyAI_image.MODELS_CONFIG.items():
+            if k in combined:
+                combined[k] = v
+        return jsonify(combined)
     return jsonify(MODELS_CONFIG)
 
 # GALLERY APIS
@@ -1094,6 +1106,7 @@ def start_generation():
     tier = request.form.get('tier', '').strip()
     resolution = request.form.get('resolution', '').strip()
     num_images = int(request.form.get('num_images', 1))
+    image_service = request.form.get('image_service', 'pixelbunny').strip().lower()
     
     if not prompt:
         return jsonify({'error': 'Prompt girmelisiniz!'}), 400
@@ -1209,6 +1222,7 @@ def start_generation():
         'tier': tier,
         'resolution': resolution,
         'num_images': num_images,
+        'image_service': image_service,
         'images': memory_images,
         'wan_params': wan_params,
         'agnes_params': agnes_params,
@@ -1993,7 +2007,58 @@ def run_job_in_background(job_id):
                     except Exception:
                         pass
             return
-        
+
+        # PIXEL BUNNY HANDLER (Kullanıcı Pixel Bunny servisini seçtiyse)
+        image_service = job.get('image_service', 'pixelbunny')
+        if image_service == 'pixelbunny':
+            if not pixelBunnyAI_image:
+                add_log("Pixel Bunny modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'Pixel Bunny modülü bulunamadı.'
+                return
+
+            try:
+                res = pixelBunnyAI_image.run_image(
+                    prompt=prompt,
+                    model_name=model_name,
+                    aspect_ratio=aspect_ratio,
+                    num_images=num_images,
+                    tier=tier,
+                    resolution=resolution,
+                    images=images,
+                    log_callback=add_log,
+                    job_id=job_id,
+                    is_active=lambda: job_id in ACTIVE_JOBS
+                )
+                outputs = res.get('outputs', [])
+                if outputs:
+                    for url in outputs:
+                        item = {
+                            'id': uuid.uuid4().hex,
+                            'url': url,
+                            'prompt': prompt,
+                            'model': model_name,
+                            'aspect_ratio': aspect_ratio,
+                            'tier': tier,
+                            'service': 'pixelbunny',
+                            'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                        }
+                        GENERATION_HISTORY.insert(0, item)
+
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['outputs'] = outputs
+                        ACTIVE_JOBS[job_id]['status'] = 'completed'
+                else:
+                    raise RuntimeError("Pixel Bunny görsel üretimi çıktı üretmedi.")
+            except Exception as pb_err:
+                add_log(f"Pixel Bunny Hatası: {str(pb_err)}", "error", 90)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = str(pb_err)
+            return
+
+        # WILD OWL HANDLER
         # Step 1: E-posta oluşturma ve kayıt
         add_log("Temp mail & proxy üzerinden geçici e-posta alınıyor...", "registering", 10)
         temp = eTemp()
