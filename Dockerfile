@@ -4,6 +4,7 @@ FROM python:3.11-slim
 ENV PYTHONUNBUFFERED=1 \
     DEBIAN_FRONTEND=noninteractive \
     CLOAKBROWSER_AUTO_UPDATE=false \
+    CLOAKBROWSER_LICENSE_KEY="cb_6e99fda796014975b9832dfc35ecb1b2" \
     PORT=10000
 
 # Chromium ve CloakBrowser için gerekli tam Linux sistem kütüphaneleri
