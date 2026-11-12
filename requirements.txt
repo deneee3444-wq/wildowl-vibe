@@ -6,7 +6,7 @@ google-auth-oauthlib
 google-auth-httplib2
 pycryptodome
 beautifulsoup4
-cloakbrowser==0.6.4
+cloakbrowser
 playwright
 curl_cffi
 Pillow
