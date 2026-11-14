@@ -632,7 +632,7 @@ except ImportError:
             }
         },
         "Seedance 1.0 Pro Fast": {
-            "model_id": "seedance_v1_pro_fast",
+            "model_id": "wan-2-2-5b",
             "type": "video",
             "provider": "morph",
             "tiers": ["5", "10"],
