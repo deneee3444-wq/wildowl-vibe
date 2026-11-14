@@ -650,17 +650,17 @@ except ImportError:
         #     "resolutions": ["1k", "2k", "4k"],
         #     "resolution": "1k"
         # },
-        "GPT Image 2.5 (Sunburst)": {
-            "model_id": "openai/gpt-image-2.5",
-            "type": "image",
-            "provider": "morph",
-            "mode": "sunburst",
-            "tiers": ["low", "medium", "high", "xhigh"],
-            "tier_labels": {"low": "Low Kalite", "medium": "Medium Kalite", "high": "High Kalite", "xhigh": "Xhigh Kalite"},
-            "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"],
-            "resolutions": ["1k", "2k", "4k"],
-            "resolution": "2k"
-        },
+        #"GPT Image 2.5 (Sunburst)": {
+        #    "model_id": "openai/gpt-image-2.5",
+        #    "type": "image",
+        #    "provider": "morph",
+        #    "mode": "sunburst",
+        #    "tiers": ["low", "medium", "high", "xhigh"],
+        #    "tier_labels": {"low": "Low Kalite", "medium": "Medium Kalite", "high": "High Kalite", "xhigh": "Xhigh Kalite"},
+        #    "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "2:1", "1:2", "3:1", "1:3"],
+        #    "resolutions": ["1k", "2k", "4k"],
+        #    "resolution": "2k"
+        #},
         "GPT Image 2.5 (Flare)": {
             "model_id": "openai/gpt-image-2.5",
             "type": "image",
