@@ -631,25 +631,25 @@ except ImportError:
                 "seed": ""
             }
         },
-        "Seedance 1.0 Pro Fast": {
-            "model_id": "wan-2-2-5b",
+        "Wan 2.2 5B": {
+            "model_id": "wan_2_2_5b",
             "type": "video",
             "provider": "morph",
-            "tiers": ["5", "10"],
-            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye"},
-            "aspect_ratios": ["16:9", "9:16", "1:1"],
-            "resolutions": ["480p", "720p", "1080p"],
-            "resolution": "480p"
+            "tiers": ["5"],
+            "tier_labels": {"5": "5 Saniye"},
+            "aspect_ratios": ["16:9", "9:16"],
+            "resolutions": ["720p"],
+            "resolution": "720p"
         },
-        "Nano Banana 2.1": {
-            "model_id": "google/nano-banana-2.1",
-            "type": "image",
-            "provider": "morph",
-            "tiers": ["standard"],
-            "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1"],
-            "resolutions": ["1k", "2k", "4k"],
-            "resolution": "1k"
-        },
+        # "Nano Banana 2.1": {
+        #     "model_id": "google/nano-banana-2.1",
+        #     "type": "image",
+        #     "provider": "morph",
+        #     "tiers": ["standard"],
+        #     "aspect_ratios": ["1:1", "3:2", "2:3", "3:4", "4:3", "4:5", "5:4", "9:16", "16:9", "21:9", "1:4", "4:1", "1:8", "8:1"],
+        #     "resolutions": ["1k", "2k", "4k"],
+        #     "resolution": "1k"
+        # },
         "GPT Image 2.5 (Sunburst)": {
             "model_id": "openai/gpt-image-2.5",
             "type": "image",
