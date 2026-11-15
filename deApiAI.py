@@ -55,7 +55,14 @@ import requests
 from bs4 import BeautifulSoup
 from curl_cffi import requests as cffi_requests
 import cloakbrowser
-from browser_manager import fetch_turnstile_session_and_close, _BROWSER_LOCK
+try:
+    from browser_manager import fetch_turnstile_session_and_close, _BROWSER_LOCK
+    BROWSER_AVAILABLE = True
+except ImportError:
+    BROWSER_AVAILABLE = False
+    _BROWSER_LOCK = None
+    def fetch_turnstile_session_and_close(*args, **kwargs):
+        return {"cookies": {}, "user_agent": "", "html": ""}
 
 def _ensure_browser_binary():
     """
