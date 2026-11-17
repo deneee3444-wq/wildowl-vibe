@@ -35,6 +35,12 @@ MODELS_CONFIG = {
         "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4"],
         "resolution": "1K"
     },
+    "Seedream 5.5": {
+        "model_id": "seedream-5.5",
+        "tiers": ["2k"],
+        "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
+        "resolution": "2K"
+    },
     "Seedream 5 Pro": {
         "model_id": "seedream-5-pro",
         "tiers": ["1k", "2k"],
