@@ -687,9 +687,9 @@ except ImportError:
         },
         "Seedream 5.5": {
             "model_id": "seedream-5.5",
-            "tiers": ["2k"],
+            "tiers": ["standard"],
             "aspect_ratios": ["1:1", "16:9", "9:16", "4:3", "3:4", "3:2", "2:3", "21:9"],
-            "resolution": "2K"
+            "resolution": "1K"
         },
         "Seedream 5 Pro": {
             "model_id": "seedream-5-pro",
