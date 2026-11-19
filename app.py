@@ -1,6 +1,13 @@
 import os
 import re
 import sys
+
+_CURRENT_DIR = os.path.dirname(os.path.abspath(__file__))
+if not sys.path or sys.path[0] != _CURRENT_DIR:
+    if _CURRENT_DIR in sys.path:
+        sys.path.remove(_CURRENT_DIR)
+    sys.path.insert(0, _CURRENT_DIR)
+
 import uuid
 import json
 import time
@@ -513,6 +520,21 @@ except ImportError:
     deApiAI = None
 
 try:
+    import teamDebateAI
+    if not hasattr(teamDebateAI, 'run_video'):
+        import importlib.util
+        _tb_path = os.path.join(_CURRENT_DIR, "teamDebateAI.py")
+        if os.path.exists(_tb_path):
+            _spec = importlib.util.spec_from_file_location("teamDebateAI", _tb_path)
+            if _spec and _spec.loader:
+                teamDebateAI = importlib.util.module_from_spec(_spec)
+                sys.modules["teamDebateAI"] = teamDebateAI
+                _spec.loader.exec_module(teamDebateAI)
+except Exception as _e:
+    print(f"[!] teamDebateAI import hatası: {_e}", flush=True)
+    teamDebateAI = None
+
+try:
     import pixelBunnyAI_image
 except ImportError:
     pixelBunnyAI_image = None
@@ -524,6 +546,25 @@ try:
 except ImportError:
     # Fallback config if import fails
     MODELS_CONFIG = {
+        "P-Video-2-Pro Video": {
+            "model_id": "p_video_2_pro",
+            "model_slug": "p_video_2_pro",
+            "type": "video",
+            "provider": "teamdebate",
+            "tiers": ["5", "6", "7", "8", "9", "10", "11", "12", "13", "14", "15"],
+            "tier_labels": {
+                "5": "5 Saniye", "6": "6 Saniye", "7": "7 Saniye", "8": "8 Saniye",
+                "9": "9 Saniye", "10": "10 Saniye", "11": "11 Saniye", "12": "12 Saniye",
+                "13": "13 Saniye", "14": "14 Saniye", "15": "15 Saniye"
+            },
+            "aspect_ratios": ["16:9", "9:16"],
+            "resolutions": ["480p", "768p"],
+            "resolution": "480p",
+            "extra_settings": {
+                "negative_prompt": "",
+                "seed": ""
+            }
+        },
         "MiniMax H3 Video": {
             "model_id": "MiniMaxH3_33B_Turbo_INT8",
             "model_slug": "MiniMaxH3_33B_Turbo_INT8",
@@ -2014,6 +2055,101 @@ def run_job_in_background(job_id):
                         pass
             return
 
+        # TEAM DEBATE AI HANDLER (P-Video-2-Pro Video)
+        if model_name in ["P-Video-2-Pro Video", "P-Video-2-Pro"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "teamdebate"):
+            if not teamDebateAI:
+                add_log("Team Debate AI modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'Team Debate AI modülü bulunamadı.'
+                return
+
+            model_cfg = MODELS_CONFIG.get(model_name, {})
+            model_slug = model_cfg.get("model_slug") or model_cfg.get("model_id", "p_video_2_pro")
+            add_log(f"Team Debate ({model_name}) video motoru hazırlanıyor...", "registering", 5)
+
+            temp_img_paths = []
+            for idx, img_data in enumerate(images[:9]):
+                ext = ".jpg"
+                if "png" in img_data.get("content_type", "").lower():
+                    ext = ".png"
+                temp_dir = os.path.join(ROOT_DIR, "scratch")
+                os.makedirs(temp_dir, exist_ok=True)
+                t_path = os.path.join(temp_dir, f"debate_vid_ref_{job_id}_{idx}{ext}")
+                with open(t_path, "wb") as f:
+                    f.write(img_data['content'])
+                temp_img_paths.append(t_path)
+
+            try:
+                duration_choice = tier if tier in [str(i) for i in range(5, 16)] else "5"
+                res_choice = resolution if resolution in ["480p", "768p"] else "480p"
+                ar_choice = aspect_ratio or "16:9"
+
+                deapi_p = job.get('deapi_params') or {}
+                res = teamDebateAI.run_video(
+                    prompt=prompt,
+                    images=temp_img_paths,
+                    aspect_ratio=ar_choice,
+                    duration=duration_choice,
+                    resolution=res_choice,
+                    model=model_slug,
+                    negative_prompt=deapi_p.get('negative_prompt', ""),
+                    seed=deapi_p.get('seed'),
+                    audio_path=deapi_p.get('audio_path'),
+                    audio_url=deapi_p.get('audio_url'),
+                    video_path=deapi_p.get('video_path'),
+                    video_url=deapi_p.get('video_url'),
+                    ref_mode=deapi_p.get('ref_mode', 'gallery'),
+                    log_callback=add_log,
+                    job_id=job_id,
+                    is_active=lambda: job_id in ACTIVE_JOBS
+                )
+                output_url = res.get("output")
+                if output_url:
+                    item = {
+                        'id': uuid.uuid4().hex,
+                        'url': output_url,
+                        'prompt': prompt,
+                        'model': model_name,
+                        'aspect_ratio': ar_choice,
+                        'tier': duration_choice,
+                        'resolution': res_choice,
+                        'type': "video",
+                        'request_id': res.get('request_id'),
+                        'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                    }
+                    GENERATION_HISTORY.insert(0, item)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                        ACTIVE_JOBS[job_id]['status'] = 'completed'
+                else:
+                    raise RuntimeError("Team Debate Video üretimi URL üretmedi.")
+            except Exception as d_err:
+                add_log(f"Team Debate Video Hatası: {str(d_err)}", "error", 90)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = str(d_err)
+            finally:
+                for p in temp_img_paths:
+                    if os.path.exists(p):
+                        try:
+                            os.remove(p)
+                        except Exception:
+                            pass
+                a_path = (job.get('deapi_params') or {}).get('audio_path')
+                if a_path and os.path.exists(a_path):
+                    try:
+                        os.remove(a_path)
+                    except Exception:
+                        pass
+                v_path = (job.get('deapi_params') or {}).get('video_path')
+                if v_path and os.path.exists(v_path):
+                    try:
+                        os.remove(v_path)
+                    except Exception:
+                        pass
+            return
+
         # PIXEL BUNNY HANDLER (Kullanıcı Pixel Bunny servisini seçtiyse)
         image_service = job.get('image_service', 'pixelbunny')
         if image_service == 'pixelbunny':
@@ -2431,13 +2567,7 @@ def get_active_jobs():
 
 if __name__ == '__main__':
     port = int(os.environ.get("PORT", 10000))
-    if deApiAI and hasattr(deApiAI, "warmup_cf_session"):
-        print("[*] [Boot] deAPI Cloudflare Turnstile ön ısıtması yapılıyor, lütfen bekleyin...", flush=True)
-        try:
-            deApiAI.warmup_cf_session()
-        except Exception as w_err:
-            print(f"[!] [Boot] Warmup hatası: {w_err}", flush=True)
-        print("[+] [Boot] Turnstile hazırlandı, tarayıcı kapandı. Web sunucusu başlatılıyor...", flush=True)
-
+    # deAPI Turnstile tarayıcısı artık sunucu başlangıcında değil,
+    # sadece MiniMax ile ilk işlem başlatıldığında (veya çerez bayatladığında) tembelce (on-demand) açılır.
     print(f"[*] Studio Web Server başlatıldı: http://0.0.0.0:{port}", flush=True)
     app.run(host='0.0.0.0', port=port, debug=False, threaded=True)
