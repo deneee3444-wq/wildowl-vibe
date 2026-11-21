@@ -929,6 +929,11 @@ def get_models():
     if not is_logged_in():
         return jsonify({'error': 'Unauthorized'}), 401
     service = request.args.get('service', '').strip().lower()
+    if service in ['chat', 'pixelbunny_chat'] and pixelBunnyAI:
+        return jsonify({
+            'models': pixelBunnyAI.AVAILABLE_MODELS,
+            'default': getattr(pixelBunnyAI, 'DEFAULT_MODEL', 'hermes-4-405b')
+        })
     if service == 'pixelbunny' and pixelBunnyAI_image:
         combined = dict(MODELS_CONFIG)
         for k, v in pixelBunnyAI_image.MODELS_CONFIG.items():
@@ -1020,7 +1025,18 @@ def clear_prompts():
     CUSTOM_PROMPTS = []
     return jsonify({'success': True})
 
-# AI CHAT APIS (PixelBunny Hermes-4-405B)
+# AI CHAT APIS (PixelBunny)
+@app.route('/api/chat/models')
+def get_chat_models():
+    if not is_logged_in():
+        return jsonify({'error': 'Unauthorized'}), 401
+    models = pixelBunnyAI.AVAILABLE_MODELS if pixelBunnyAI else []
+    default_model = getattr(pixelBunnyAI, 'DEFAULT_MODEL', 'hermes-4-405b')
+    return jsonify({
+        'models': models,
+        'default': default_model
+    })
+
 @app.route('/api/chat/history')
 def get_chat_history():
     if not is_logged_in():
