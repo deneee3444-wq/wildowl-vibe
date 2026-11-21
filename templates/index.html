@@ -1161,7 +1161,74 @@
             border-bottom: 1px solid var(--line);
         }
         .chat-model { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; }
-        .chat-model .icon { color: var(--accent); }
+        .chat-model .combo { min-width: 200px; max-width: 250px; }
+        .chat-model .combo-leading { color: var(--accent); }
+        .chat-images-preview {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            margin-bottom: 8px;
+            padding: 8px 10px;
+            background: var(--surface);
+            border: 1px solid var(--line);
+            border-radius: 12px;
+        }
+        .chat-preview-item {
+            position: relative;
+            width: 52px;
+            height: 52px;
+            border-radius: 8px;
+            overflow: hidden;
+            border: 1px solid var(--line-strong);
+            background: #000;
+        }
+        .chat-preview-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            display: block;
+        }
+        .chat-preview-item .remove-btn {
+            position: absolute;
+            top: 2px;
+            right: 2px;
+            width: 17px;
+            height: 17px;
+            border-radius: 50%;
+            background: rgba(0, 0, 0, 0.8);
+            color: #fff;
+            border: 0;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 11px;
+            line-height: 1;
+            padding: 0;
+            transition: background .15s;
+        }
+        .chat-preview-item .remove-btn:hover {
+            background: var(--danger);
+        }
+        .chat-message-images {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 6px;
+            margin-bottom: 6px;
+        }
+        .chat-message-thumb {
+            width: 72px;
+            height: 72px;
+            border-radius: 8px;
+            object-fit: cover;
+            border: 1px solid var(--line-strong);
+            cursor: pointer;
+            transition: transform .15s, opacity .15s;
+        }
+        .chat-message-thumb:hover {
+            transform: scale(1.04);
+            opacity: 0.9;
+        }
         .chat-top-actions { display: flex; align-items: center; gap: 12px; }
         .switch-label { display: flex; align-items: center; gap: 7px; cursor: pointer; color: var(--muted); font-size: 10px; }
         .switch-input {
@@ -2259,8 +2326,8 @@
             <section class="panel chat-panel" id="tab-chat" role="tabpanel" aria-labelledby="tabButton-chat" hidden>
                 <div class="chat-top">
                     <div class="chat-model">
-                        <svg class="icon"><use href="#i-spark"/></svg>
-                        Hermes 4 405B
+                        <span id="chatModelLabel" hidden>Model</span>
+                        <div class="combo" id="chatModelCombo"></div>
                     </div>
                     <div class="chat-top-actions">
                         <label class="switch-label">
@@ -2283,7 +2350,12 @@
                 </div>
 
                 <div class="chat-compose-wrap">
+                    <div class="chat-images-preview" id="chatImagesPreview" hidden></div>
                     <div class="chat-compose">
+                        <button type="button" class="btn ghost icon-btn" id="chatAttachBtn" title="Resim ekle (çoklu)" aria-label="Resim ekle">
+                            <svg class="icon" style="width:16px;height:16px"><use href="#i-plus"/></svg>
+                        </button>
+                        <input type="file" id="chatFileInput" multiple accept="image/*" style="display: none;">
                         <textarea id="chatInput" rows="1" placeholder="Bir mesaj yazın..." aria-label="Sohbet mesajı"></textarea>
                         <button class="btn primary icon-btn" id="chatSendBtn" aria-label="Mesaj gönder">
                             <svg class="icon"><use href="#i-send"/></svg>
@@ -2678,6 +2750,16 @@
                     event.preventDefault();
                     focusIndex = event.key === 'Home' ? 0 : filtered.length - 1;
                     focusOption();
+                } else if (event.key.length === 1 && !event.ctrlKey && !event.metaKey && !event.altKey) {
+                    const char = event.key.toLowerCase();
+                    const matchIdx = filtered.findIndex((item, i) => i > focusIndex && (item.label || item.value || '').toLowerCase().startsWith(char));
+                    const fallbackIdx = filtered.findIndex(item => (item.label || item.value || '').toLowerCase().startsWith(char));
+                    const targetIdx = matchIdx !== -1 ? matchIdx : fallbackIdx;
+                    if (targetIdx !== -1) {
+                        event.preventDefault();
+                        focusIndex = targetIdx;
+                        focusOption();
+                    }
                 }
             });
 
@@ -2901,6 +2983,47 @@
         'film',
         value => { selectedDeapiFps = value; }
     ) : null;
+
+    const CHAT_MODELS = [
+        "claude-opus-4.7",
+        "claude-sonnet-4.6",
+        "deepseek-v3.2",
+        "deepseek-v4-flash",
+        "deepseek-v4-pro",
+        "gemini-3.1-flash-lite-preview",
+        "gemini-3.1-pro-preview",
+        "glm-5.1",
+        "gpt-5.2",
+        "gpt-5.4-nano",
+        "gpt-5.4-mini",
+        "gpt-5.4",
+        "gpt-5.5",
+        "grok-4.3",
+        "grok-4.20",
+        "kimi-k2",
+        "kimi-k2.6",
+        "minimax-m2.5-pro",
+        "qwen3-vl-235b",
+        "qwen3.5-35b-a3b",
+        "qwen3.6-plus",
+        "hermes-3-405b", 
+        "hermes-4-405b", 
+        "wizardlm-2-8x22b", 
+        "euryale-70b", 
+        "rocinante-12b",
+    ];
+
+    let selectedChatModel = 'hermes-4-405b';
+    const chatModelCombo = $('chatModelCombo') ? new StudioCombo(
+        'chatModelCombo',
+        'chatModelLabel',
+        'spark',
+        value => { selectedChatModel = value; }
+    ) : null;
+
+    if (chatModelCombo) {
+        chatModelCombo.setItems(CHAT_MODELS, 'hermes-4-405b');
+    }
 
     let selectedDeapiAudioFile = null;
     let selectedDeapiVideoFile = null;
@@ -5469,22 +5592,92 @@
         return fragment;
     }
 
+    let chatAttachedImages = [];
+
+    function readFileAsDataURL(file) {
+        return new Promise((resolve, reject) => {
+            const reader = new FileReader();
+            reader.onload = () => resolve(reader.result);
+            reader.onerror = reject;
+            reader.readAsDataURL(file);
+        });
+    }
+
+    function renderChatImagePreviews() {
+        const container = $('chatImagesPreview');
+        if (!container) return;
+
+        if (!chatAttachedImages.length) {
+            container.hidden = true;
+            container.replaceChildren();
+            return;
+        }
+
+        container.hidden = false;
+        container.replaceChildren();
+
+        chatAttachedImages.forEach((img, idx) => {
+            const item = document.createElement('div');
+            item.className = 'chat-preview-item';
+
+            const image = document.createElement('img');
+            image.src = img.data;
+            image.alt = img.name || 'Görsel';
+
+            const removeBtn = document.createElement('button');
+            removeBtn.type = 'button';
+            removeBtn.className = 'remove-btn';
+            removeBtn.innerHTML = '&times;';
+            removeBtn.title = 'Kaldır';
+            removeBtn.addEventListener('click', (e) => {
+                e.stopPropagation();
+                chatAttachedImages.splice(idx, 1);
+                renderChatImagePreviews();
+            });
+
+            item.append(image, removeBtn);
+            container.append(item);
+        });
+    }
+
     function appendChatMessage(role, text, options = {}) {
         $('chatEmptyState')?.remove();
 
         const normalizedRole = role === 'user' ? 'user' : 'assistant';
         const rawText = String(text ?? '');
+        const currentModel = options.model || (chatModelCombo ? chatModelCombo.value : 'hermes-4-405b');
 
         const message = document.createElement('article');
         message.className = `chat-message ${normalizedRole}`;
 
         const roleLabel = document.createElement('div');
         roleLabel.className = 'message-role';
-        roleLabel.textContent = normalizedRole === 'user' ? 'Siz' : 'Hermes 4 405B';
+        roleLabel.textContent = normalizedRole === 'user' ? 'Siz' : currentModel;
 
         const bubble = document.createElement('div');
         bubble.className = 'message-bubble';
-        bubble.append(formatChatText(rawText));
+
+        if (options.images && options.images.length > 0) {
+            const imgWrap = document.createElement('div');
+            imgWrap.className = 'chat-message-images';
+            options.images.forEach(img => {
+                const imgEl = document.createElement('img');
+                imgEl.src = typeof img === 'string' ? img : (img.data || img.url);
+                imgEl.className = 'chat-message-thumb';
+                imgEl.alt = 'Yüklenen görsel';
+                imgEl.title = 'Büyütmek için tıklayın';
+                imgEl.loading = 'lazy';
+                imgEl.addEventListener('click', () => {
+                    window.open(imgEl.src, '_blank');
+                });
+                imgWrap.append(imgEl);
+            });
+            bubble.append(imgWrap);
+        }
+
+        if (rawText) {
+            bubble.append(formatChatText(rawText));
+        }
 
         const tools = document.createElement('div');
         tools.className = 'message-tools';
@@ -5541,7 +5734,11 @@
         `;
     }
 
-    function showTypingIndicator(text = 'Hermes 4 405B yanıtlıyor...') {
+    function showTypingIndicator(text) {
+        if (!text) {
+            const modelName = chatModelCombo ? chatModelCombo.value : 'hermes-4-405b';
+            text = `${modelName} yanıtlıyor...`;
+        }
         hideTypingIndicator();
         $('chatEmptyState')?.remove();
 
@@ -5568,6 +5765,8 @@
         $('chatSendBtn').disabled = disabled || !chatReady;
         $('chatClearBtn').disabled = disabled;
         $('chatSystemPromptSwitch').disabled = disabled;
+        if (chatModelCombo?.button) chatModelCombo.button.disabled = disabled;
+        if ($('chatAttachBtn')) $('chatAttachBtn').disabled = disabled;
     }
 
     async function fetchChatSystemPrompt() {
@@ -5618,10 +5817,13 @@
         }
     }
 
-    async function postChatMessage(message, isSystem = false) {
+    async function postChatMessage(message, isSystem = false, model = null, images = []) {
+        const selectedModel = model || (chatModelCombo ? chatModelCombo.value : 'hermes-4-405b');
         return post('/api/chat/send', {
             message,
-            is_system: isSystem
+            is_system: isSystem,
+            model: selectedModel,
+            images: images
         });
     }
 
@@ -5630,22 +5832,29 @@
 
         const input = $('chatInput');
         const userText = input.value.trim();
-        if (!userText) return;
+        const hasImages = chatAttachedImages.length > 0;
+
+        if (!userText && !hasImages) return;
+
+        const selectedModel = chatModelCombo ? chatModelCombo.value : 'hermes-4-405b';
+        const imagesToSend = [...chatAttachedImages];
 
         const sendSystem =
             isChatSessionFresh && $('chatSystemPromptSwitch').checked;
 
         input.value = '';
         input.style.height = 'auto';
+        chatAttachedImages = [];
+        renderChatImagePreviews();
         setChatControlsDisabled(true);
 
         let userDisplayed = false;
 
         try {
             if (sendSystem) {
-                showTypingIndicator('Hermes 4 405B hazırlanıyor...');
+                showTypingIndicator(`${selectedModel} hazırlanıyor...`);
 
-                const systemResult = await postChatMessage(cachedSystemPrompt, true);
+                const systemResult = await postChatMessage(cachedSystemPrompt, true, selectedModel);
                 hideTypingIndicator();
 
                 // Mark initialization complete even if the next request fails.
@@ -5653,6 +5862,7 @@
 
                 if (systemResult.reply) {
                     appendChatMessage('assistant', systemResult.reply, {
+                        model: selectedModel,
                         timeStr:
                             systemResult.assistant_item?.created_at ||
                             systemResult.item?.created_at
@@ -5660,11 +5870,15 @@
                 }
             }
 
-            appendChatMessage('user', userText);
+            const displayText = userText || (imagesToSend.length > 1 ? `[${imagesToSend.length} Görsel]` : '[Görsel]');
+            appendChatMessage('user', displayText, {
+                images: imagesToSend
+            });
             userDisplayed = true;
-            showTypingIndicator();
+            showTypingIndicator(`${selectedModel} yanıtlıyor...`);
 
-            const result = await postChatMessage(userText, false);
+            const payloadText = userText || 'Lütfen ekteki görselleri analiz et ve açıkla.';
+            const result = await postChatMessage(payloadText, false, selectedModel, imagesToSend);
 
             hideTypingIndicator();
             isChatSessionFresh = false;
@@ -5674,6 +5888,7 @@
             }
 
             appendChatMessage('assistant', result.reply, {
+                model: selectedModel,
                 timeStr:
                     result.assistant_item?.created_at ||
                     result.item?.created_at
@@ -5683,6 +5898,8 @@
 
             // Do not lose the user's text on a failed request.
             input.value = userText;
+            chatAttachedImages = imagesToSend;
+            renderChatImagePreviews();
             resizeChatInput();
 
             toast(
@@ -5710,10 +5927,13 @@
         setChatControlsDisabled(true);
 
         try {
-            await post('/api/chat/reset');
+            const selectedModel = chatModelCombo ? chatModelCombo.value : 'hermes-4-405b';
+            await post('/api/chat/reset', { model: selectedModel });
 
             chatHistoryVersion++;
             isChatSessionFresh = true;
+            chatAttachedImages = [];
+            renderChatImagePreviews();
             renderChatEmpty();
 
             $('chatInput').value = '';
@@ -5746,6 +5966,33 @@
 
     $('chatSendBtn').addEventListener('click', sendChatMessage);
     $('chatClearBtn').addEventListener('click', clearChat);
+
+    if ($('chatAttachBtn') && $('chatFileInput')) {
+        $('chatAttachBtn').addEventListener('click', () => {
+            if (!isChatBusy) $('chatFileInput').click();
+        });
+
+        $('chatFileInput').addEventListener('change', async (event) => {
+            const files = Array.from(event.target.files || []);
+            if (!files.length) return;
+
+            for (const file of files) {
+                if (!file.type.startsWith('image/')) continue;
+                try {
+                    const dataUrl = await readFileAsDataURL(file);
+                    chatAttachedImages.push({
+                        name: file.name,
+                        data: dataUrl,
+                        type: file.type || 'image/jpeg'
+                    });
+                } catch (e) {
+                    console.error('Görsel okunamadı:', e);
+                }
+            }
+            event.target.value = '';
+            renderChatImagePreviews();
+        });
+    }
 
     /* Viewport density:
        desktop = 5 columns, 2 rows (total 10 cards fit on screen).
