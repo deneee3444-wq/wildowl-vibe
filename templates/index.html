@@ -2984,35 +2984,6 @@
         value => { selectedDeapiFps = value; }
     ) : null;
 
-    const CHAT_MODELS = [
-        "claude-opus-4.7",
-        "claude-sonnet-4.6",
-        "deepseek-v3.2",
-        "deepseek-v4-flash",
-        "deepseek-v4-pro",
-        "gemini-3.1-flash-lite-preview",
-        "gemini-3.1-pro-preview",
-        "glm-5.1",
-        "gpt-5.2",
-        "gpt-5.4-nano",
-        "gpt-5.4-mini",
-        "gpt-5.4",
-        "gpt-5.5",
-        "grok-4.3",
-        "grok-4.20",
-        "kimi-k2",
-        "kimi-k2.6",
-        "minimax-m2.5-pro",
-        "qwen3-vl-235b",
-        "qwen3.5-35b-a3b",
-        "qwen3.6-plus",
-        "hermes-3-405b", 
-        "hermes-4-405b", 
-        "wizardlm-2-8x22b", 
-        "euryale-70b", 
-        "rocinante-12b",
-    ];
-
     let selectedChatModel = 'hermes-4-405b';
     const chatModelCombo = $('chatModelCombo') ? new StudioCombo(
         'chatModelCombo',
@@ -3020,10 +2991,6 @@
         'spark',
         value => { selectedChatModel = value; }
     ) : null;
-
-    if (chatModelCombo) {
-        chatModelCombo.setItems(CHAT_MODELS, 'hermes-4-405b');
-    }
 
     let selectedDeapiAudioFile = null;
     let selectedDeapiVideoFile = null;
@@ -5769,6 +5736,19 @@
         if ($('chatAttachBtn')) $('chatAttachBtn').disabled = disabled;
     }
 
+    async function fetchChatModels() {
+        try {
+            const data = await api('/api/chat/models');
+            const models = Array.isArray(data) ? data : (data?.models || []);
+            const defaultModel = data?.default || 'hermes-4-405b';
+            if (models.length && chatModelCombo) {
+                selectedChatModel = chatModelCombo.setItems(models, selectedChatModel || defaultModel);
+            }
+        } catch (error) {
+            console.warn('Chat modelleri sunucudan alınamadı:', error);
+        }
+    }
+
     async function fetchChatSystemPrompt() {
         try {
             const data = await api('/api/chat/system-prompt');
@@ -6074,6 +6054,7 @@
 
         try {
             await Promise.all([
+                fetchChatModels(),
                 fetchChatSystemPrompt(),
                 fetchChatHistory()
             ]);
