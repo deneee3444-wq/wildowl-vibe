@@ -929,11 +929,6 @@ def get_models():
     if not is_logged_in():
         return jsonify({'error': 'Unauthorized'}), 401
     service = request.args.get('service', '').strip().lower()
-    if service in ['chat', 'pixelbunny_chat'] and pixelBunnyAI:
-        return jsonify({
-            'models': pixelBunnyAI.AVAILABLE_MODELS,
-            'default': getattr(pixelBunnyAI, 'DEFAULT_MODEL', 'hermes-4-405b')
-        })
     if service == 'pixelbunny' and pixelBunnyAI_image:
         combined = dict(MODELS_CONFIG)
         for k, v in pixelBunnyAI_image.MODELS_CONFIG.items():
