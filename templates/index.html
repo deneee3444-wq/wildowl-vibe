@@ -2,7 +2,7 @@
 <html lang="tr">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+    <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content">
     <meta name="theme-color" content="#101113">
     <title>Wild Owl | AI Studio</title>
     <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%23d8f58a' stroke-width='1.8' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='M3 3l5 3h8l5-3-1 12-8 6-8-6L3 3Z'/%3E%3Ccircle cx='8' cy='11' r='3'/%3E%3Ccircle cx='16' cy='11' r='3'/%3E%3Cpath d='m10 15 2 2 2-2M8 10.5v1M16 10.5v1'/%3E%3C/svg%3E">
@@ -386,7 +386,7 @@
         .mode-btn.active { color: var(--text); background: var(--surface-3); }
         .mode-btn:disabled { opacity: .3; }
 
-        .creator-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 2px; }
+        .creator-settings { display: grid; grid-template-columns: 1fr 1fr; gap: 10px 8px; margin-bottom: 4px; }
         .creator-settings .model-group { grid-column: 1 / -1; }
         .creator-settings #resolutionSection { grid-column: 1 / -1; }
 
@@ -473,7 +473,22 @@
             text-align: left;
         }
 
-        .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; align-items: start; }
+        .options-grid,
+        .options-row {
+            display: grid;
+            grid-template-columns: repeat(2, minmax(0, 1fr));
+            gap: 10px 8px;
+            align-items: start;
+            width: 100%;
+        }
+        .options-grid > .control-group,
+        .options-row > .control-group {
+            min-width: 0;
+            width: 100%;
+            display: flex;
+            flex-direction: column;
+        }
+        .options-grid .field-label,
         .options-row .field-label {
             height: 17px;
             line-height: 17px;
@@ -483,11 +498,18 @@
             overflow: hidden;
             text-overflow: ellipsis;
         }
+        .options-grid .combo-trigger,
+        .options-grid .adv-seed,
         .options-row .combo-trigger,
         .options-row .adv-seed {
             height: 38px;
             min-height: 38px;
+            width: 100%;
             box-sizing: border-box;
+        }
+        .options-grid > .span-full,
+        .options-row > .span-full {
+            grid-column: 1 / -1;
         }
 
         .audio-input-wrap {
@@ -1156,13 +1178,48 @@
             display: flex;
             align-items: center;
             justify-content: space-between;
-            gap: 12px;
-            padding: 12px 20px;
+            gap: 10px;
+            padding: 10px 18px;
             border-bottom: 1px solid var(--line);
+            flex-wrap: nowrap;
+            min-height: 52px;
+            background: var(--bg);
         }
-        .chat-model { display: flex; align-items: center; gap: 8px; font-size: 12px; font-weight: 500; }
-        .chat-model .combo { min-width: 200px; max-width: 250px; }
-        .chat-model .combo-leading { color: var(--accent); }
+        .chat-model {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            font-size: 12px;
+            font-weight: 500;
+            min-width: 0;
+            flex: 1 1 auto;
+        }
+        .chat-model .combo { width: 100%; max-width: 210px; min-width: 130px; }
+        .chat-model .combo-trigger {
+            height: 35px;
+            min-height: 35px;
+            padding: 4px 8px;
+            gap: 7px;
+            display: flex;
+            align-items: center;
+        }
+        .chat-model .combo-leading {
+            display: flex !important;
+            align-items: center;
+            justify-content: center;
+            color: var(--accent);
+            flex-shrink: 0;
+        }
+        .chat-model .combo-leading .icon {
+            width: 15px;
+            height: 15px;
+            display: block;
+        }
+        .chat-model .combo-value {
+            font-size: 12px;
+            font-weight: 550;
+            line-height: 1;
+        }
         .chat-images-preview {
             display: flex;
             flex-wrap: wrap;
@@ -1229,23 +1286,39 @@
             transform: scale(1.04);
             opacity: 0.9;
         }
-        .chat-top-actions { display: flex; align-items: center; gap: 12px; }
-        .switch-label { display: flex; align-items: center; gap: 7px; cursor: pointer; color: var(--muted); font-size: 10px; }
+        .chat-top-actions {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+        .switch-label {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            cursor: pointer;
+            color: var(--muted);
+            font-size: 11px;
+            white-space: nowrap;
+            user-select: none;
+            margin: 0;
+        }
         .switch-input {
             appearance: none;
-            width: 29px;
-            height: 17px;
+            width: 28px;
+            height: 16px;
             border: 0;
             border-radius: 20px;
             background: var(--surface-3);
             position: relative;
             cursor: pointer;
             margin: 0;
+            flex-shrink: 0;
         }
         .switch-input::after {
             content: "";
-            width: 11px;
-            height: 11px;
+            width: 10px;
+            height: 10px;
             position: absolute;
             left: 3px;
             top: 3px;
@@ -1255,6 +1328,34 @@
         }
         .switch-input:checked { background: var(--accent); }
         .switch-input:checked::after { background: #28311c; transform: translateX(12px); }
+        #chatClearBtn {
+            height: 32px;
+            min-height: 32px;
+            padding: 4px 9px;
+            font-size: 11.5px;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            gap: 5px;
+            white-space: nowrap;
+        }
+        #chatClearBtn .icon {
+            width: 13px;
+            height: 13px;
+            margin: 0;
+        }
+        .switch-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-block;
+        }
+        .clear-text {
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            display: inline-block;
+        }
         .chat-messages { flex: 1; min-height: 0; overflow-y: auto; padding: 22px max(20px, calc((100% - 760px) / 2)); }
         .chat-message { display: flex; flex-direction: column; align-items: flex-start; gap: 6px; margin-bottom: 22px; }
         .chat-message.user { align-items: flex-end; }
@@ -1280,28 +1381,73 @@
         .chat-compose-wrap { padding: 12px max(20px, calc((100% - 800px) / 2)) 18px; }
         .chat-compose {
             display: flex;
-            align-items: flex-end;
+            align-items: center;
             gap: 10px;
-            padding: 10px;
+            padding: 8px 10px;
             border-radius: 14px;
             background: var(--surface);
             border: 1px solid var(--line-strong);
+            box-sizing: border-box;
         }
         .chat-compose:focus-within { border-color: #d8f58a45; box-shadow: 0 0 0 3px #d8f58a18, 0 0 12px #d8f58a0d; }
         .chat-compose textarea {
             flex: 1;
             min-width: 0;
-            min-height: 35px;
+            min-height: 24px;
             max-height: 150px;
-            padding: 6px;
+            padding: 3px 6px;
             border: 0;
             resize: none;
             background: transparent;
             color: var(--text);
-            font-size: 13px;
-            line-height: 1.7;
+            font-size: 13.5px;
+            line-height: 1.5;
+            display: block;
+            box-sizing: border-box;
+            overflow-y: hidden;
+            scrollbar-width: thin;
         }
-        .chat-compose .icon-btn { width: 35px; min-height: 35px; }
+        .chat-compose textarea::-webkit-scrollbar {
+            width: 4px;
+        }
+        .chat-compose textarea::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.2);
+            border-radius: 4px;
+        }
+        .chat-compose .icon-btn {
+            width: 36px;
+            height: 36px;
+            min-height: 36px;
+            border-radius: 10px;
+            flex-shrink: 0;
+            display: inline-flex;
+            align-items: center;
+            justify-content: center;
+            padding: 0;
+            margin: 0;
+        }
+        .chat-compose .icon-btn .icon {
+            width: 17px;
+            height: 17px;
+            display: block;
+            margin: 0;
+            flex-shrink: 0;
+        }
+        #chatAttachBtn {
+            color: var(--muted);
+            transition: color .15s, background .15s;
+        }
+        #chatAttachBtn:hover {
+            color: var(--text);
+            background: var(--surface-2);
+        }
+        #chatSendBtn {
+            background: var(--accent);
+            color: #20251a;
+        }
+        #chatSendBtn:hover:not(:disabled) {
+            background: var(--accent-hover);
+        }
         .chat-hint { text-align: center; color: var(--faint); font-size: 9px; margin-top: 8px; }
         .typing { color: var(--muted); font-size: 12px; display: flex; align-items: center; gap: 9px; margin-bottom: 20px; }
         .spinner { animation: spin 1s linear infinite; }
@@ -1520,10 +1666,10 @@
             .workspace { flex-direction: column; }
             .creator { width: 100%; flex: 0 0 auto; border-right: 0; border-bottom: 1px solid var(--line); }
             .creator-heading { padding: 12px 14px 6px; }
-            .creator-body { overflow: visible; padding: 0 14px 6px; gap: 8px; }
+            .creator-body { overflow: visible; padding: 0 14px 8px; gap: 12px; }
             .mode-switch { width: 100%; max-width: none; margin-bottom: 2px; }
             .mode-btn { min-height: 38px; font-size: 13px; }
-            .creator-settings, .options-row { display: grid; grid-template-columns: 1fr 1fr; gap: 8px 10px; margin-bottom: 2px; }
+            .creator-settings, .options-row, .options-grid { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 12px 10px; margin-bottom: 4px; }
             .model-group { grid-column: 1 / -1; }
             .combo-trigger { min-height: 40px; padding: 7px 10px; font-size: 13px; }
             .adv-seed { min-height: 40px; height: 40px; font-size: 13px; padding: 7px 10px; }
@@ -1535,9 +1681,17 @@
             .prompt-group { flex: 0 0 auto; min-height: auto; }
             .prompt-shell { flex: 0 0 auto; min-height: auto; }
             .main-prompt { min-height: 100px; height: auto; font-size: 14.5px; padding: 9px 11px; }
-            .creator-footer { padding: 8px 14px 14px; border-top: 0; }
+            .creator-footer { padding: 3px 14px 12px; border-top: 0; }
             .generate-btn { min-height: 46px; font-size: 14.5px; }
             .main { min-height: 420px; overflow: visible; }
+            body.chat-tab-active { overflow: hidden !important; }
+            body.chat-tab-active .creator { display: none !important; }
+            body.chat-tab-active .app { height: 100dvh !important; min-height: 100dvh !important; overflow: hidden !important; }
+            body.chat-tab-active .workspace { height: calc(100dvh - var(--header-height)); min-height: 0; overflow: hidden; }
+            body.chat-tab-active .main { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; flex: 1; }
+            body.chat-tab-active .chat-panel { display: flex !important; flex-direction: column; flex: 1 1 auto; height: calc(100% - var(--tabs-height)) !important; min-height: 0 !important; overflow: hidden; }
+            body.chat-tab-active .chat-messages { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
+            body.chat-tab-active .chat-compose-wrap { flex-shrink: 0; padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
             .tabs {
                 position: sticky;
                 top: 0;
@@ -1580,11 +1734,91 @@
             .saved-prompt p { font-size: 11px; -webkit-line-clamp: 4; }
             .saved-prompt-actions { flex-wrap: wrap; gap: 3px; }
             .chat-panel { height: 74dvh; min-height: 480px; flex: 0 0 auto; }
-            .chat-top { padding: 12px; gap: 9px; flex-wrap: wrap; }
-            .chat-top-actions { gap: 8px; }
-            .chat-messages { padding: 18px 14px; }
-            .chat-compose-wrap { padding: 10px 12px 15px; }
-            .chat-compose textarea { font-size: 16px; }
+            .chat-top {
+                padding: 8px 12px;
+                gap: 6px;
+                flex-wrap: nowrap;
+                min-height: 46px;
+                align-items: center;
+            }
+            .chat-model { min-width: 0; flex: 1 1 auto; align-items: center; }
+            .chat-model .combo { width: 100%; min-width: 105px; max-width: 170px; }
+            .chat-model .combo-trigger {
+                height: 33px;
+                min-height: 33px;
+                padding: 4px 6px;
+                gap: 5px;
+            }
+            .chat-model .combo-value { font-size: 11.5px; }
+            .chat-model .combo-leading, #chatModelCombo .combo-leading {
+                display: flex !important;
+                align-items: center;
+                justify-content: center;
+            }
+            .chat-model .combo-leading .icon, #chatModelCombo .combo-leading .icon {
+                width: 14px;
+                height: 14px;
+                display: block;
+                color: var(--accent);
+            }
+            .chat-top-actions {
+                display: flex;
+                align-items: center;
+                gap: 6px;
+                flex-shrink: 0;
+                min-width: 0;
+            }
+            .switch-label {
+                height: 33px;
+                display: inline-flex;
+                align-items: center;
+                margin: 0;
+                font-size: 11px;
+                min-width: 0;
+            }
+            .switch-text {
+                max-width: 95px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            #chatClearBtn {
+                height: 33px;
+                min-height: 33px;
+                padding: 4px 8px;
+                font-size: 11px;
+                gap: 4px;
+                display: inline-flex;
+                align-items: center;
+                justify-content: center;
+                min-width: 0;
+                flex-shrink: 0;
+            }
+            .clear-text {
+                max-width: 85px;
+                overflow: hidden;
+                text-overflow: ellipsis;
+                white-space: nowrap;
+            }
+            .chat-messages { padding: 14px 12px; }
+            .chat-compose-wrap { padding: 8px 10px 12px; }
+            .chat-compose {
+                align-items: center;
+                padding: 7px 9px;
+                gap: 8px;
+            }
+            .chat-compose .icon-btn {
+                width: 36px;
+                height: 36px;
+                min-height: 36px;
+            }
+            .chat-compose textarea {
+                font-size: 16px;
+                line-height: 1.4;
+                min-height: 26px;
+                padding: 3px 6px;
+                overflow-y: hidden;
+            }
             .media-layout {
                 flex-direction: column;
                 align-items: center;
@@ -1659,10 +1893,14 @@
             .tab .icon { width: 13px; height: 13px; }
             .tab .count { min-width: 16px; height: 15px; font-size: 9px; padding: 0 3px; }
             .prompt-list { grid-template-columns: 1fr; }
-            .creator-settings, .options-row { gap: 0 9px; }
+            .creator-settings, .options-row, .options-grid { gap: 10px 8px; }
+            .creator-body { gap: 10px; }
             .combo-trigger { padding-left: 8px; padding-right: 8px; gap: 6px; }
             .adv-seed { padding-left: 8px; padding-right: 8px; }
-            .combo-leading { display: none; }
+            .combo:not(#chatModelCombo) .combo-leading { display: none; }
+            #chatModelCombo .combo-leading { display: flex !important; }
+            .switch-text { max-width: 82px; }
+            .clear-text { max-width: 76px; }
         }
 
         @media (hover: none) {
@@ -2033,7 +2271,7 @@
                                     </label>
                                 </div>
 
-                                <div class="options-row" style="margin-top: 4px;">
+                                <div class="options-grid" style="margin-top: 4px;">
                                     <div class="control-group">
                                         <div class="field-label" id="wanMovementLabel">Hareket Şiddeti</div>
                                         <div class="combo" id="wanMovementCombo"></div>
@@ -2043,9 +2281,7 @@
                                         <label class="field-label" for="wanSeed">Seed</label>
                                         <input type="number" id="wanSeed" class="adv-seed" placeholder="Rastgele" min="1" max="999999" inputmode="numeric">
                                     </div>
-                                </div>
 
-                                <div class="options-row" style="margin-top: 4px;">
                                     <div class="control-group">
                                         <label class="field-label" for="wanNegative">Negatif Prompt</label>
                                         <input type="text" id="wanNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık, düşük kalite...">
@@ -2084,7 +2320,7 @@
                         <div class="adv-panel-inner">
                             <div class="adv-panel-content">
 
-                                <div class="options-row">
+                                <div class="options-grid">
                                     <div class="control-group">
                                         <div class="field-label" id="agnesFpsLabel">Kare Hızı</div>
                                         <div class="combo" id="agnesFpsCombo"></div>
@@ -2097,9 +2333,7 @@
                                             <input type="checkbox" id="agnesPromptExpansion" class="switch-input" style="flex: 0 0 auto;">
                                         </label>
                                     </div>
-                                </div>
 
-                                <div class="options-row" style="margin-top: 4px;">
                                     <div class="control-group">
                                         <label class="field-label" for="agnesSeed">Seed</label>
                                         <input type="number" id="agnesSeed" class="adv-seed" placeholder="Rastgele" min="0" max="999999" inputmode="numeric">
@@ -2127,7 +2361,7 @@
                         <div class="adv-panel-inner">
                             <div class="adv-panel-content">
 
-                                <div class="options-row">
+                                <div class="options-grid">
                                     <div class="control-group">
                                         <div class="field-label" id="agnesImgStrengthLabel">Referans Gücü</div>
                                         <div class="combo" id="agnesImgStrengthCombo"></div>
@@ -2140,9 +2374,7 @@
                                             <input type="checkbox" id="agnesImgPromptExpansion" class="switch-input" style="flex: 0 0 auto;">
                                         </label>
                                     </div>
-                                </div>
 
-                                <div class="options-row" style="margin-top: 4px;">
                                     <div class="control-group">
                                         <label class="field-label" for="agnesImgSeed">Seed</label>
                                         <input type="number" id="agnesImgSeed" class="adv-seed" placeholder="Rastgele" min="0" max="999999" inputmode="numeric">
@@ -2170,7 +2402,7 @@
                         <div class="adv-panel-inner">
                             <div class="adv-panel-content">
 
-                                <div class="options-row">
+                                <div class="options-grid">
                                     <div class="control-group" id="deapiExpandGroup">
                                         <div class="field-label">Prompt Geliştir</div>
                                         <label class="combo-trigger" style="cursor: pointer; justify-content: space-between; padding-right: 8px;">
@@ -2183,12 +2415,10 @@
                                         <label class="field-label" for="deapiSeed">Seed</label>
                                         <input type="number" id="deapiSeed" class="adv-seed" placeholder="Rastgele" min="0" max="99999999" inputmode="numeric">
                                     </div>
-                                </div>
 
-                                <div class="options-row" style="margin-top: 4px;">
-                                    <div class="control-group" style="width: 100%;">
+                                    <div class="control-group" id="deapiNegativeGroup">
                                         <label class="field-label" for="deapiNegative">Negatif Prompt</label>
-                                        <input type="text" id="deapiNegative" class="adv-seed" style="text-align: left; font-size: 11.5px; width: 100%;" placeholder="örn: bulanık...">
+                                        <input type="text" id="deapiNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık...">
                                     </div>
                                 </div>
 
@@ -2330,13 +2560,13 @@
                         <div class="combo" id="chatModelCombo"></div>
                     </div>
                     <div class="chat-top-actions">
-                        <label class="switch-label">
+                        <label class="switch-label" title="Sistem promptu">
                             <input type="checkbox" id="chatSystemPromptSwitch" class="switch-input">
-                            Sistem promptu
+                            <span class="switch-text">Sistem promptu</span>
                         </label>
-                        <button class="btn ghost small" id="chatClearBtn">
-                            <svg class="icon" style="width:14px;height:14px"><use href="#i-plus"/></svg>
-                            Yeni sohbet
+                        <button class="btn ghost small" id="chatClearBtn" title="Yeni sohbet">
+                            <svg class="icon"><use href="#i-plus"/></svg>
+                            <span class="clear-text">Yeni sohbet</span>
                         </button>
                     </div>
                 </div>
@@ -2353,7 +2583,7 @@
                     <div class="chat-images-preview" id="chatImagesPreview" hidden></div>
                     <div class="chat-compose">
                         <button type="button" class="btn ghost icon-btn" id="chatAttachBtn" title="Resim ekle (çoklu)" aria-label="Resim ekle">
-                            <svg class="icon" style="width:16px;height:16px"><use href="#i-plus"/></svg>
+                            <svg class="icon"><use href="#i-plus"/></svg>
                         </button>
                         <input type="file" id="chatFileInput" multiple accept="image/*" style="display: none;">
                         <textarea id="chatInput" rows="1" placeholder="Bir mesaj yazın..." aria-label="Sohbet mesajı"></textarea>
@@ -3299,12 +3529,16 @@
             panel.hidden = panel !== target;
         });
 
-        if (name === 'chat') {
-            $('chatMessages').scrollTop = $('chatMessages').scrollHeight;
-        }
+        document.body.classList.toggle('chat-tab-active', name === 'chat');
 
-        if (scrollOnMobile && matchMedia('(max-width: 760px)').matches) {
-            document.querySelector('.tabs').scrollIntoView({
+        if (name === 'chat') {
+            if (matchMedia('(max-width: 760px)').matches) {
+                window.scrollTo({ top: 0, behavior: 'instant' });
+            }
+            const chatMessages = $('chatMessages');
+            if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
+        } else if (scrollOnMobile && matchMedia('(max-width: 760px)').matches) {
+            document.querySelector('.tabs')?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start'
             });
@@ -5823,7 +6057,7 @@
             isChatSessionFresh && $('chatSystemPromptSwitch').checked;
 
         input.value = '';
-        input.style.height = 'auto';
+        resizeChatInput();
         chatAttachedImages = [];
         renderChatImagePreviews();
         setChatControlsDisabled(true);
@@ -5917,7 +6151,7 @@
             renderChatEmpty();
 
             $('chatInput').value = '';
-            $('chatInput').style.height = 'auto';
+            resizeChatInput();
             toast('Yeni sohbet başlatıldı.');
         } catch (error) {
             toast(error.message || 'Sohbet temizlenemedi.', true);
@@ -5929,8 +6163,20 @@
 
     function resizeChatInput() {
         const input = $('chatInput');
+        if (!input) return;
+        const compose = input.closest('.chat-compose');
         input.style.height = 'auto';
-        input.style.height = `${Math.min(input.scrollHeight, 150)}px`;
+        const scrollH = input.scrollHeight;
+        if (scrollH > 150) {
+            input.style.height = '150px';
+            input.style.overflowY = 'auto';
+        } else {
+            input.style.height = `${scrollH}px`;
+            input.style.overflowY = 'hidden';
+        }
+        if (compose) {
+            compose.style.alignItems = input.offsetHeight > 36 ? 'flex-end' : 'center';
+        }
     }
 
     $('chatInput').addEventListener('input', resizeChatInput);
@@ -6051,6 +6297,7 @@
     async function initializeChat() {
         chatReady = false;
         setChatControlsDisabled(true);
+        resizeChatInput();
 
         try {
             await Promise.all([
@@ -6061,6 +6308,7 @@
         } finally {
             chatReady = true;
             setChatControlsDisabled(false);
+            resizeChatInput();
         }
     }
 
