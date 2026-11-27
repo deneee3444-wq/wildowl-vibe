@@ -539,6 +539,11 @@ try:
 except ImportError:
     pixelBunnyAI_image = None
 
+try:
+    import qFotoAI
+except ImportError:
+    qFotoAI = None
+
 # Try to import config and helpers from wildOwlAI.py
 try:
     from wildOwlAI import SupabaseSignup as _WO
@@ -546,6 +551,20 @@ try:
 except ImportError:
     # Fallback config if import fails
     MODELS_CONFIG = {
+        "qFoto Video": {
+            "model_id": "qfoto-video",
+            "type": "video",
+            "provider": "qfoto",
+            "tiers": ["5", "10", "15"],
+            "tier_labels": {"5": "5 Saniye", "10": "10 Saniye", "15": "15 Saniye"},
+            "aspect_ratios": ["16:9", "9:16", "1:1"],
+            "resolutions": ["720p"],
+            "resolution": "720p",
+            "extra_settings": {
+                "enable_prompt_expansion": True,
+                "negative_prompt": ""
+            }
+        },
         "P-Video-2-Pro Video": {
             "model_id": "p_video_2_pro",
             "model_slug": "p_video_2_pro",
@@ -1119,6 +1138,26 @@ def chat_reset_session():
         pixelBunnyAI.chat_reset()
     return jsonify({'success': True})
 
+# QFOTO IN-MEMORY LIVE STREAM (SIFIR DİSK DEPOLAMASI)
+@app.route('/api/qfoto/stream/<path:filename>')
+def stream_qfoto_video(filename):
+    token = request.args.get('t', '')
+    headers = {
+        "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/158.0.0.0 Safari/537.36",
+        "Accept": "*/*"
+    }
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
+    upstream_url = f"https://qfoto-ai.com/api/user-output-salon-image/display/{filename}"
+    res = requests.get(upstream_url, headers=headers, stream=True, timeout=60)
+    resp_headers = {
+        "Content-Type": res.headers.get("Content-Type", "video/mp4"),
+        "Accept-Ranges": "bytes"
+    }
+    if "Content-Length" in res.headers:
+        resp_headers["Content-Length"] = res.headers["Content-Length"]
+    return Response(res.iter_content(chunk_size=65536), status=res.status_code, headers=resp_headers)
+
 # DIRECT PROXY DOWNLOAD
 @app.route('/api/download')
 def proxy_download():
@@ -1127,6 +1166,19 @@ def proxy_download():
     url = request.args.get('url')
     if not url:
         return "Missing url parameter", 400
+    if url.startswith('/api/qfoto/stream/'):
+        from urllib.parse import urlparse, parse_qs
+        parsed = urlparse(url)
+        fname = parsed.path.split('/api/qfoto/stream/')[-1]
+        t = parse_qs(parsed.query).get('t', [''])[0]
+        headers = {"Authorization": f"Bearer {t}"} if t else {}
+        upstream_url = f"https://qfoto-ai.com/api/user-output-salon-image/display/{fname}"
+        res = requests.get(upstream_url, headers=headers, stream=True, timeout=60)
+        resp_headers = {
+            'Content-Disposition': f'attachment; filename=qfoto_{fname}',
+            'Content-Type': res.headers.get('Content-Type', 'video/mp4')
+        }
+        return Response(res.iter_content(chunk_size=65536), headers=resp_headers)
     try:
         res = requests.get(url, stream=True, timeout=60)
         if res.status_code != 200:
@@ -1272,6 +1324,13 @@ def start_generation():
         deapi_params['video_url'] = ''
         deapi_params['video_path'] = None
 
+    # qFoto Extra parameters from request or model config defaults
+    qfoto_extra_cfg = MODELS_CONFIG.get(model, {}).get("extra_settings", {})
+    qfoto_params = {
+        'enable_prompt_expansion': request.form.get('qfoto_expand', request.form.get('enable_prompt_expansion', str(qfoto_extra_cfg.get('enable_prompt_expansion', True)))).lower() == 'true',
+        'negative_prompt': request.form.get('qfoto_negative', request.form.get('negative_prompt', qfoto_extra_cfg.get('negative_prompt', ''))).strip(),
+    }
+
     # Store parameters & files directly in RAM dict
     ACTIVE_JOBS[job_id] = {
         'prompt': prompt,
@@ -1285,6 +1344,7 @@ def start_generation():
         'wan_params': wan_params,
         'agnes_params': agnes_params,
         'deapi_params': deapi_params,
+        'qfoto_params': qfoto_params,
         'created_at': time.time(),
         'status': 'registering',
         'pct': 0,
@@ -2159,6 +2219,69 @@ def run_job_in_background(job_id):
                         os.remove(v_path)
                     except Exception:
                         pass
+            return
+
+        # QFOTO AI HANDLER
+        if model_name in ["qFoto Video", "QFoto Video"] or (MODELS_CONFIG.get(model_name, {}).get("provider") == "qfoto"):
+            if not qFotoAI:
+                add_log("qFoto AI modülü yüklenemedi!", "error", 5)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = 'qFoto AI modülü bulunamadı.'
+                return
+
+            add_log("qFoto AI video motoru hazırlanıyor...", "registering", 5)
+            q_img_bytes = None
+            q_img_path = None
+            if images and len(images) > 0:
+                img_data = images[0]
+                q_img_bytes = img_data.get('content')
+            else:
+                test_jpg = os.path.join(ROOT_DIR, "test.jpg")
+                if os.path.exists(test_jpg):
+                    q_img_path = test_jpg
+
+            try:
+                q_params = job.get('qfoto_params') or {}
+                duration_choice = tier if tier in ["5", "10", "15"] else "5"
+
+                res = qFotoAI.run_video(
+                    prompt=prompt,
+                    image_bytes=q_img_bytes,
+                    image_path=q_img_path,
+                    duration=duration_choice,
+                    enable_prompt_expansion=q_params.get('enable_prompt_expansion', True),
+                    negative_prompt=q_params.get('negative_prompt', ""),
+                    log_callback=add_log,
+                    job_id=job_id,
+                    is_active=lambda: job_id in ACTIVE_JOBS and ACTIVE_JOBS[job_id].get('status') not in ['failed', 'cancelled']
+                )
+
+                output_url = res.get("output")
+                if output_url:
+                    item = {
+                        'id': uuid.uuid4().hex,
+                        'url': output_url,
+                        'prompt': prompt,
+                        'model': model_name,
+                        'aspect_ratio': aspect_ratio or "16:9",
+                        'tier': duration_choice,
+                        'resolution': "720p",
+                        'type': "video",
+                        'task_id': res.get('task_id'),
+                        'created_at': time.strftime('%d.%m.%Y %H:%M:%S')
+                    }
+                    GENERATION_HISTORY.insert(0, item)
+                    if job_id in ACTIVE_JOBS:
+                        ACTIVE_JOBS[job_id]['outputs'] = [output_url]
+                        ACTIVE_JOBS[job_id]['status'] = 'completed'
+                else:
+                    raise RuntimeError(res.get("error") or "qFoto video üretimi URL üretmedi.")
+            except Exception as qf_err:
+                add_log(f"qFoto Hatası: {str(qf_err)}", "error", 90)
+                if job_id in ACTIVE_JOBS:
+                    ACTIVE_JOBS[job_id]['status'] = 'failed'
+                    ACTIVE_JOBS[job_id]['error'] = str(qf_err)
             return
 
         # PIXEL BUNNY HANDLER (Kullanıcı Pixel Bunny servisini seçtiyse)
