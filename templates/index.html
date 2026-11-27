@@ -2427,6 +2427,34 @@
                     </div>
                 </div>
 
+                <!-- qFoto AI Video Ekstra Ayarlar -->
+                <div id="qfotoAdvancedSection" hidden>
+                    <button type="button" class="combo-trigger adv-toggle" id="qfotoAdvToggle" aria-expanded="false" aria-controls="qfotoAdvPanel">
+                        <span class="combo-leading"><svg class="icon"><use href="#i-sliders"/></svg></span>
+                        <span class="combo-value">Ekstra ayarlar</span>
+                        <svg class="icon combo-chevron adv-toggle-chevron" aria-hidden="true"><use href="#i-chevron"/></svg>
+                    </button>
+                    <div class="adv-panel" id="qfotoAdvPanel" aria-hidden="true">
+                        <div class="adv-panel-inner">
+                            <div class="adv-panel-content">
+                                <div class="options-grid">
+                                    <div class="control-group" id="qfotoExpandGroup">
+                                        <div class="field-label">Prompt Geliştir</div>
+                                        <label class="combo-trigger" style="cursor: pointer; justify-content: space-between; padding-right: 8px;">
+                                            <span class="combo-value" style="font-size: 12px; color: var(--muted);">Otomatik</span>
+                                            <input type="checkbox" id="qfotoPromptExpansion" class="switch-input" style="flex: 0 0 auto;" checked>
+                                        </label>
+                                    </div>
+                                    <div class="control-group" id="qfotoNegativeGroup">
+                                        <label class="field-label" for="qfotoNegative">Negatif Prompt</label>
+                                        <input type="text" id="qfotoNegative" class="adv-seed" style="text-align: left; font-size: 11.5px;" placeholder="örn: bulanık, düşük kalite...">
+                                    </div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
                 <div class="control-group prompt-group" id="promptGroup">
                     <label class="field-label" for="promptInput">
                         <span>Prompt</span>
@@ -3388,6 +3416,15 @@
                     label: (fpsLabels[String(val)] || `${val} FPS`).replace(/\s*\([^)]*\)/g, '').trim()
                 }));
                 selectedDeapiFps = deapiFpsCombo.setItems(items, selectedDeapiFps || String(extra.fps || '24'));
+            }
+        }
+
+        const isQFoto = selectedModel.toLowerCase().includes('qfoto');
+        if ($('qfotoAdvancedSection')) {
+            $('qfotoAdvancedSection').hidden = !isQFoto;
+            if (!isQFoto) {
+                $('qfotoAdvToggle')?.setAttribute('aria-expanded', 'false');
+                $('qfotoAdvPanel')?.setAttribute('aria-hidden', 'true');
             }
         }
 
@@ -4751,6 +4788,16 @@
                         form.append('deapi_video_url', $('deapiVideoUrl').value.trim());
                     }
                 }
+            } else if (snapshot.model.toLowerCase().includes('qfoto')) {
+                if (!snapshot.files || snapshot.files.length === 0) {
+                    toast('qFoto Video için lütfen bir referans görsel seçin.', true);
+                    setGenerationBusy(false);
+                    return;
+                }
+                form.append('qfoto_expand', $('qfotoPromptExpansion')?.checked ? 'true' : 'false');
+                if ($('qfotoNegative') && $('qfotoNegative').value.trim()) {
+                    form.append('qfoto_negative', $('qfotoNegative').value.trim());
+                }
             }
 
             const sendFrames = (currentRefMode === 'frames' || snapshot.model === 'LTX 2.5 Video');
@@ -4931,6 +4978,12 @@
         const isExpanded = $('deapiAdvToggle').getAttribute('aria-expanded') === 'true';
         $('deapiAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
         $('deapiAdvPanel').setAttribute('aria-hidden', String(isExpanded));
+    });
+
+    $('qfotoAdvToggle')?.addEventListener('click', () => {
+        const isExpanded = $('qfotoAdvToggle').getAttribute('aria-expanded') === 'true';
+        $('qfotoAdvToggle').setAttribute('aria-expanded', String(!isExpanded));
+        $('qfotoAdvPanel').setAttribute('aria-hidden', String(isExpanded));
     });
 
     $('generateBtn').addEventListener('click', triggerGeneration);
