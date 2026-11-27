@@ -71,8 +71,8 @@ def generate_random_username(length: int = 10) -> str:
 TEMP_MAIL_PROXY_MODE = 1
 
 TEMP_MAIL_PROXY_CONFIG = {
-    "http": "http://nrrbciri-1:5cauzsujeluf@p.webshare.io:80",
-    "https": "http://nrrbciri-1:5cauzsujeluf@p.webshare.io:80",
+    "http": "http://fmxfdozd-1:lh982xnf6gxv@p.webshare.io:80",
+    "https": "http://fmxfdozd-1:lh982xnf6gxv@p.webshare.io:80",
 }
 
 
