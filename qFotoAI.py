@@ -386,7 +386,7 @@ def run_video(
     # 5. Video tamamlanana kadar sorgula
     _log("Video işleniyor, lütfen bekleyin...", "generating", 70)
     start_time = time.time()
-    timeout = 900
+    timeout = 1800
     video_filename = None
 
     while time.time() - start_time < timeout:
