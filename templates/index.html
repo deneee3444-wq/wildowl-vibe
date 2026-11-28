@@ -1684,14 +1684,8 @@
             .creator-footer { padding: 3px 14px 12px; border-top: 0; }
             .generate-btn { min-height: 46px; font-size: 14.5px; }
             .main { min-height: 420px; overflow: visible; }
-            body.chat-tab-active { overflow: hidden !important; }
-            body.chat-tab-active .creator { display: none !important; }
-            body.chat-tab-active .app { height: 100dvh !important; min-height: 100dvh !important; overflow: hidden !important; }
-            body.chat-tab-active .workspace { height: calc(100dvh - var(--header-height)); min-height: 0; overflow: hidden; }
-            body.chat-tab-active .main { display: flex; flex-direction: column; height: 100%; min-height: 0; overflow: hidden; flex: 1; }
-            body.chat-tab-active .chat-panel { display: flex !important; flex-direction: column; flex: 1 1 auto; height: calc(100% - var(--tabs-height)) !important; min-height: 0 !important; overflow: hidden; }
-            body.chat-tab-active .chat-messages { flex: 1 1 auto; min-height: 0; overflow-y: auto; -webkit-overflow-scrolling: touch; }
-            body.chat-tab-active .chat-compose-wrap { flex-shrink: 0; padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); background: var(--bg); }
+            .chat-messages { -webkit-overflow-scrolling: touch; }
+            .chat-compose-wrap { padding: 8px 10px calc(8px + env(safe-area-inset-bottom, 0px)); }
             .tabs {
                 position: sticky;
                 top: 0;
@@ -3566,15 +3560,11 @@
             panel.hidden = panel !== target;
         });
 
-        document.body.classList.toggle('chat-tab-active', name === 'chat');
-
         if (name === 'chat') {
-            if (matchMedia('(max-width: 760px)').matches) {
-                window.scrollTo({ top: 0, behavior: 'instant' });
-            }
             const chatMessages = $('chatMessages');
             if (chatMessages) chatMessages.scrollTop = chatMessages.scrollHeight;
-        } else if (scrollOnMobile && matchMedia('(max-width: 760px)').matches) {
+        }
+        if (scrollOnMobile && matchMedia('(max-width: 760px)').matches) {
             document.querySelector('.tabs')?.scrollIntoView({
                 behavior: 'smooth',
                 block: 'start'
